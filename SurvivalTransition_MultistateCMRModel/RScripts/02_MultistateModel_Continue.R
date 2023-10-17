@@ -1,0 +1,1220 @@
+############################################################################
+#
+# The aim of this script is to fit a multistate model to estimate the
+# stage-specific survival and transition rates, as well as detection 
+# probabilities in a population of African lions from the Serengeti National
+# Park, Tanzania. The data used was collected between 1984 and 2014.
+# This model also aims at understanding the effect of environmental (habitat
+# and rainfall) and density-dependent factors (e.g. number of females in the pride 
+# or number of nomadic coalitions) on vital rates.
+#
+# Author: Eva Conquet
+#
+############################################################################
+
+
+###########################################################################
+#
+# 1. House keeping and loading libraries and data ----
+#
+###########################################################################
+
+## 1.1. House keeping ----
+# -------------------
+
+rm(list = ls())
+
+
+## 1.2. Loading libraries ----
+# -----------------------
+
+library(nimble)
+library(boot)
+
+nimbleOptions(disallow_multivariate_argument_expressions = F)
+
+
+## 1.3. Loading data ----
+# ------------------
+
+# Custom distribution
+source("RScripts/00_dDHMM_lionKF.R")
+
+# Lion demographic dataset
+lions.data = read.csv("Data/01_LionsDemographicData.csv")
+
+# Individual capture histories
+lions.ch = read.csv("Data/02_LionsCaptureHistories.csv", row.names = 1)
+lions.ch = as.matrix(lions.ch)
+
+
+## 1.4. Covariates and their observed distribution ----
+# ------------------------------------------------
+
+# The observed distribution will be used to sample the missing values
+# of covariates needed in the model.
+
+
+# Year and season
+year = read.csv("Data/031_Covariate_Year.csv", stringsAsFactors = F)$x
+year = rep(c(1:30), each = 2)
+
+season = read.csv("Data/032_Covariate_Season.csv", stringsAsFactors = F)$x
+
+
+# Habitat
+habitat = read.csv("Data/033_Covariate_Habitat.csv", row.names = 1)
+habitat = as.matrix(habitat)
+
+# Distribution
+summary(glm(c(habitat) ~ 1, "binomial"))
+habitat.intercept.estimate = coef(glm(c(habitat) ~ 1, "binomial"))
+barplot(table(habitat) / sum(table(habitat)), ylim = c(0, 1))
+points(dbinom(0:1, size = 1, prob = inv.logit(habitat.intercept.estimate)))
+habitat = habitat + 1 # To avoid zeros in the NIMBLE model
+
+
+# Density-dependent covariates
+
+# Number of females in a pride
+nb.af.pride.unscaled = read.csv("Data/034_Covariate_NbAFpride.csv", 
+                                stringsAsFactors = F, 
+                                row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+range(nb.af.pride.unscaled, na.rm = T)
+nb.af.pride = (nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / 
+  (2 * sd(nb.af.pride.unscaled, na.rm = T)) # Standardize covariate
+
+# Distribution
+summary(MASS::glm.nb(c(nb.af.pride.unscaled) ~ 1))
+negbin.model = MASS::glm.nb(c(nb.af.pride.unscaled) ~ 1)
+hist(nb.af.pride.unscaled, freq = F)
+lines(dnbinom(min(nb.af.pride.unscaled, na.rm = T):max(nb.af.pride.unscaled, na.rm = T), 
+              9.7, 
+              mu = mean(nb.af.pride.unscaled, na.rm = T)))
+hist(rnbinom(10000, 
+             size = negbin_model$theta,
+             mu = mean(nb.af.pride.unscaled, na.rm = T)), 
+     freq = F, col = "red", add = T)
+hist(rnbinom(10000, 
+             size = negbin_model$theta, prob = 0.65), 
+     freq = F, col = "red", add = T)
+nb.af.pride.theta = negbin.model$theta
+
+
+# Age
+age.unscaled = read.csv("Data/035_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+range(age.unscaled, na.rm = T)
+age = (age.unscaled - mean(age.unscaled, na.rm = T)) / 
+  (2 * sd(age.unscaled, na.rm = T)) # Standardize covariate
+
+
+# Male coalition size 
+coal.size.unscaled = read.csv("Data/036_Covariate_CoalSize.csv", row.names = 1)
+coal.size.unscaled = as.matrix(coal.size.unscaled)
+range(coal.size.unscaled, na.rm = T)
+coal.size = (coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / 
+  (2 * sd(coal.size.unscaled, na.rm = T)) # Standardize covariate
+
+# Distribution
+summary(glm(c(coal.size.unscaled) ~ 1, "poisson"))
+summary(glm(c(coal.size.unscaled) ~ 1, "quasipoisson"))
+poisson.model = glm(c(coal.size.unscaled) ~ 1, "quasipoisson")
+summary(MASS::glm.nb(c(coal.size.unscaled) ~ 1))
+
+hist(coal.size.unscaled, freq = F)
+
+# Poisson
+lines(dpois(min(coal.size.unscaled, na.rm = T):max(coal.size.unscaled, na.rm = T), 2.35))
+hist(rpois(10000, mean(coal.size.unscaled, na.rm = T)), freq = F, col = "red", add = T)
+
+# Gamma
+lines(dgamma(min(coal.size.unscaled, na.rm = T):max(coal.size.unscaled, na.rm = T), shape = 3, scale = 1))
+hist(round(rgamma(10000, 2, scale = 1)) + 1, freq = F, col = "blue", add = T)
+
+# Negative binomial
+lines(dnbinom(min(coal.size.unscaled, na.rm = T):max(coal.size.unscaled, na.rm = T), 30, mu = 1))
+hist(rnbinom(10000, 8, mu = mean(coal.size.unscaled, na.rm = T)) + 1, freq = F, col = "green", add = T)
+
+# Normal
+lines(dnorm(min(coal.size.unscaled, na.rm = T):max(coal.size.unscaled, na.rm = T), mean = 2, sd = 0.7))
+
+coal.size.lambda = exp(poisson.model$coefficients)
+
+
+# Number of nomadic coalitions in the home range of a pride or 
+# a resident male coalition
+nb.nm.coal.hr.unscaled = read.csv("Data/037_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+range(nb.nm.coal.hr.unscaled, na.rm = T)
+nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / 
+  (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T)) # Standardize covariate
+
+# Distribution
+summary(glm(c(nb.nm.coal.hr.unscaled) ~ 1, "poisson"))
+summary(MASS::glm.nb(c(nb.nm.coal.hr.unscaled) ~ 1))
+negbin.model = MASS::glm.nb(c(nb.nm.coal.hr.unscaled) ~ 1)
+
+hist(nb.nm.coal.hr.unscaled, freq = F)
+
+# Poisson
+lines(dpois(min(nb.nm.coal.hr.unscaled, na.rm = T):max(nb.nm.coal.hr.unscaled, na.rm = T), 1))
+hist(rpois(10000, 2.3), freq = F, col = "red", add = T)
+
+# Gamma
+lines(dgamma(min(nb.nm.coal.hr.unscaled, na.rm = T):max(nb.nm.coal.hr.unscaled, na.rm = T), shape = 1, scale = 2.5))
+hist(round(rgamma(10000, shape = 1, scale = 2.2)), freq = F, col = "blue", add = T, breaks = 15)
+
+# Negative binomial
+lines(dnbinom(min(nb.nm.coal.hr.unscaled, na.rm = T):max(nb.nm.coal.hr.unscaled, na.rm = T), 3, mu = 1))
+hist(rnbinom(100000, negbin_model$theta, mu = mean(nb.nm.coal.hr.unscaled, na.rm = T)), freq = F, col = "green", add = T)
+hist(rnbinom(100000, negbin_model$theta, prob = 0.35), freq = F, col = "green", add = T)
+
+nb.nm.coal.hr.theta = negbin.model$theta
+
+
+
+
+###########################################################################
+#
+# 2. Formatting capture histories ----
+#
+###########################################################################
+
+## 2.1. Getting the first and last capture occasion of each lion ----
+# --------------------------------------------------------------
+
+get.first = function(x) min(which(x != 13)) # First observed state
+get.last  = function(x){
+  
+  if(any(x == 11)){which(x == 11)} # Dead recovery occasion
+  else{length(x)} # Otherwise, last capture occasion
+  
+}
+
+lions.first = apply(lions.ch, 1, get.first)
+lions.last  = apply(lions.ch, 1, get.last)
+
+
+## 2.2. Remove lions seen only in the last occasion ----
+# -------------------------------------------------
+
+lions.ch = lions.ch[- which(lions.first == lions.last), ]
+
+age = age[- which(lions.first == lions.last), ]
+age.unscaled = age.unscaled[- which(lions.first == lions.last), ]
+habitat = habitat[- which(lions.first == lions.last), ]
+
+lions.first = apply(lions.ch, 1, get.first)
+lions.last  = apply(lions.ch, 1, get.last)
+
+
+## 2.3. Subset data if needed ----
+# ---------------------------
+
+reduced.data = F
+subset.size = 100
+
+if(reduced.data){
+  
+  # Subset capture histories
+  lions.ch = lions.ch[1:subset.size, ]
+  
+  # Subset individual covariates
+  age = age[1:subset.size, ]
+  age.unscaled = age.unscaled[1:subset.size, ]
+  habitat = habitat[1:subset.size, ]
+  
+  # Get new first and last sighting
+  lions.first = apply(lions.ch, 1, get.first)
+  lions.last  = apply(lions.ch, 1, get.last)
+}
+
+
+## 2.4. Create group matrix ----
+# -------------------------
+
+# The group matrix will enable to find the density-dependent covariates
+# corresponding to a given individual based on its group (pride or nomadic coalition)
+
+lions.groups = matrix(NA, nrow = nrow(lions.ch), ncol = ncol(lions.ch), 
+                      dimnames = list(rownames(lions.ch), seq(1:60))) # Empty matrix
+
+# Fill in the matrix
+for(lion in rownames(lions.groups)){
+  
+  lions.groups[lion, lions.data$n_census[lions.data$id == lion & lions.data$n_census >= lions_first[lion]]] = 
+    lions.data$group[lions.data$id == lion & lions.data$n_census >= lions.first[lion]]
+}
+
+# Filling in NAs at t assuming lions stayed in the same group as at t-1
+for(lion in rownames(lions.groups)){
+  
+  for(t in as.numeric(which(is.na(lions.groups[lion, ])))){
+    
+    if(all(is.na(lions.groups[lion, ]))){break} # If there are only NAs, 
+    # go to the next individual
+    
+    if(t < as.numeric(lions.first[lion])){next} # If the NA is before the 
+    # first sighting, continue to 
+    # the next iteration
+    
+    lions.groups[lion, t] = lions.groups[lion, t-1]
+    
+  }
+}
+
+# Remove females only seen as nomad because we cannot assign them group covariates
+nomadic.females = which(apply(lions.groups, 1, function(x) all(is.na(x)))) 
+
+lions.ch = lions.ch[- nomadic.females, ]
+age = age[- nomadic.females, ]
+age.unscaled = age.unscaled[- nomadic.females, ]
+habitat = habitat[- nomadic.females, ]
+lions_groups = lions_groups[- nomadic.females, ]
+
+# Check that there are no NAs left
+lions.groups[which(apply(lions.groups, 1, function(x) any(is.na(x)))), ]
+lions.ch[which(apply(lions.groups, 1, function(x) any(is.na(x)))), ]
+
+# Get new first and last sightings
+lions.first = apply(lions.ch, 1, get.first)
+lions.last  = apply(lions.ch, 1, get.last)
+
+
+
+
+###########################################################################
+#
+# 2. Preparing and fitting the model ----
+#
+###########################################################################
+
+## 2.1. Preparing the model ----
+# -------------------------
+
+# Model code
+
+lions_code_lionKFDHMM = nimbleCode({
+  # -------------------------------------------------
+  #
+  # Parameters:
+  # mu.s.sa1:     survival probability of a Subadult 1 
+  # mu.s.sa2f:    survival probability of a Subadult 2 Female
+  # mu.s.sa2m:    survival probability of a Subadult 2 Male
+  # mu.s.af:      survival probability of an Adult Female 
+  # mu.s.ym:      survival probability of a Young Male 
+  # mu.s.nm:      survival probability of a Nomadic Male 
+  # mu.s.rm:      survival probability of a Resident Male 
+  
+  # mu.emig.ym:   emigration probability of a Young Male
+  # mu.t.ym.nm:   transition probability YM-NM
+  # mu.takeover:  takeover probability of a Nomadic Male
+  # mu.eviction:  eviction probability of a Resident Male
+  
+  # mu.dp.pride:  detection probability of a pride individual (SA, AF, YM, RM)
+  # mu.dp.nm:     detection probability of a Nomadic Male
+  #
+  # -------------------------------------------------
+  #
+  # States (S):
+  #
+  # 1 Subadult 1
+  # 2 Subadult 2 Female
+  # 3 Subadult 2 Male
+  # 4 Adult Female
+  # 5 Young Male 1
+  # 6 Young Male 2
+  # 7 Young Male 3
+  # 8 Young Male 4
+  # 9 Nomadic Male
+  # 10 Resident Male
+  # 11 Newly dead
+  # 12 Permanently dead
+  #
+  # Observations (O): 
+  #
+  # 1 seen as Subadult 1
+  # 2 seen as Subadult 2 Female
+  # 3 seen as Subadult 2 Male
+  # 4 seen as Adult Female
+  # 5 seen as Young Male 1
+  # 6 seen as Young Male 2
+  # 7 seen as Young Male 3
+  # 8 seen as Young Male 4
+  # 9 seen as Nomadic Male
+  # 10 seen as Resident Male
+  # 11 seen Dead
+  # 13 not seen
+  #
+  # -------------------------------------------------
+  #
+  # Priors and constraints
+  
+  # Generalised linear models
+  
+  for(i in 1:nind){
+    
+    for(t in lions.first[i]:lions.last[i]){ # From the first to the last sighting
+      # of each individual
+      
+      # Survival
+      
+      # Young subadult
+      logit(survSA1[i, t]) <- mu.s.sa1[season[t]] +
+        s.sa1.beta.nb.nm.coal.hr[season[t]] * nb.nm.coal.hr[group[i, t], t] +
+        s.sa1.beta.nb.af.pride[season[t]] * nb.af.pride[group[i, t], t] +
+        s.sa1.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.sa1[season[t], year[t]]
+      
+      # Female old subadult
+      logit(survSA2F[i, t]) <- mu.s.sa2f[season[t]] +
+        s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr[group[i, t], t] +
+        s.sa2.beta.nb.af.pride[season[t]] * nb.af.pride[group[i, t], t] +
+        s.sa2.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.sa2[season[t], year[t]]
+      
+      # Male old subadult                 
+      logit(survSA2M[i, t]) <- mu.s.sa2m[season[t]] +
+        s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr[group[i, t], t] +
+        s.sa2.beta.nb.af.pride[season[t]] * nb.af.pride[group[i, t], t] +
+        s.sa2.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.sa2[season[t], year[t]]
+      
+      # Adult female
+      logit(survAF[i, t]) <- mu.s.af[season[t]] +
+        s.af.beta.age[season[t]] * age[i, t] +
+        s.af.beta.nb.af.pride[season[t]] * nb.af.pride[group[i, t], t] +
+        s.af.beta.nb.nm.coal.hr[season[t]] * nb.nm.coal.hr[group[i, t], t] +
+        s.af.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.af[season[t], year[t]]
+      
+      # Young male
+      logit(survYM[i, t]) <- mu.s.ym[season[t]] +
+        s.ym.beta.nb.nm.coal.hr[season[t]] * nb.nm.coal.hr[group[i, t], t] +
+        s.ym.beta.nb.af.pride[season[t]] * nb.af.pride[group[i, t], t] +
+        s.ym.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.ym[season[t], year[t]]
+      
+      # Nomadic male
+      logit(survNM[i, t]) <- mu.s.nm[season[t]] +
+        s.nm.beta.coal.size[season[t]] * coal.size[group[i, t], t] +
+        s.nm.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.nm[season[t], year[t]]
+      
+      # Resident male
+      logit(survRM[i, t]) <- mu.s.rm[season[t]] +
+        s.rm.beta.coal.size[season[t]] * coal.size[group[i, t], t] +
+        s.rm.beta.nb.nm.coal.hr[season[t]] * nb.nm.coal.hr[group[i, t], t] +
+        s.rm.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.s.rm[season[t], year[t]]
+      
+      
+      # Transitions
+      
+      # Young-male emigration
+      logit(emigYM[i, t]) <- mu.emig.ym[season[t]] +
+        emig.ym.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.emig.ym[season[t], year[t]]
+      
+      # Young-male transition to nomadic male
+      logit(transYMNM[i, t]) <- mu.t.ym.nm[season[t]] +
+        epsilon.t.ym.nm[season[t], year[t]]
+      
+      # Nomadic-male takeover
+      logit(takeover[i, t]) <- mu.takeover[season[t]] +
+        takeover.beta.coal.size[season[t]] * coal.size[group[i, t], t] +
+        takeover.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.takeover[season[t], year[t]]
+      
+      # Resident-male eviction
+      logit(eviction[i, t]) <- mu.eviction[season[t]] +
+        eviction.beta.coal.size[season[t]] * coal.size[group[i, t], t] +
+        eviction.beta.nb.nm.coal.hr[season[t]] * nb.nm.coal.hr[group[i, t], t] +
+        eviction.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.eviction[season[t], year[t]]
+      
+      
+      # Detection probabilities
+      
+      # Pride individuals (subadults, young males, adult females, and resident males)
+      logit(dpPride[i, t]) <- mu.dp.pride[season[t]] +
+        dp.pride.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.dp.pride[season[t], year[t]]
+      
+      # Nomadic males
+      logit(dpNM[i, t]) <- mu.dp.nm[season[t]] +
+        dp.nm.beta.habitat.woodland[season[t], habitat[i, t]] +
+        epsilon.dp.nm[season[t], year[t]]
+      
+      # Dead recovery
+      logit(dpDead[i, t]) <- mu.dp.dead[season[t]] +
+        epsilon.dp.dead[season[t], year[t]]
+      
+    }
+  }
+  
+  # Priors
+  
+  s.sa2.beta.nb.nm.coal.hr ~ dunif(-10, 10) # We do not estimate season-specific
+  # effects of nomadic coalitions on
+  # old subadults because of a lack
+  # of data.
+  
+  # For the intercepts and all the other effects, we estimate one parameter 
+  # per season
+  for(seas in 1:2){
+    
+    # Means
+    
+    # Survival
+    
+    mu.s.sa1[seas] ~ dunif(-10, 10)     # Young subadult
+    mu.s.sa2f[seas] ~ dunif(-10, 10)    # Female old subadult
+    mu.s.sa2m[seas] ~ dunif(-10, 10)    # Male old subadult
+    mu.s.af[seas] ~ dunif(-10, 10)      # Adult female
+    mu.s.ym[seas] ~ dunif(-10, 10)      # Young male
+    mu.s.nm[seas] ~ dunif(-10, 10)      # Nomadic male
+    mu.s.rm[seas] ~ dunif(-10, 10)      # Resident male
+    
+    
+    # Transition
+    
+    mu.emig.ym[seas] ~ dunif(-10, 10)   # Young-male emigration
+    mu.t.ym.nm[seas] ~ dunif(-10, 10)   # Young-male transition to nomadic male
+    mu.takeover[seas] ~ dunif(-10, 10)  # Nomadic-male takeover
+    mu.eviction[seas] ~ dunif(-10, 10)  # Resident-male eviction
+    
+    
+    # Detection probability
+    
+    mu.dp.pride[seas] ~ dunif(-10, 10)  # Pride individual
+    mu.dp.nm[seas] ~ dunif(-10, 10)     # Nomadic male
+    mu.dp.dead[seas] ~ dunif(-10, 10)   # Dead recovery
+    
+    
+    # Other parameters
+    
+    # Young-subadult (SA1) survival
+    
+    s.sa1.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)          # Number of nomadic coalitions in the home range
+    s.sa1.beta.nb.af.pride[seas] ~ dunif(-10, 10)            # Number of adult females in the pride
+    s.sa1.beta.habitat.woodland[seas, 1] <- 0                # Habitat - grassland (reference level)
+    s.sa1.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)    # Habitat - woodland 
+    
+    
+    # Old-subadult (SA2F and SA2M) survival
+    # For the covariate effects we do not differentiate between sexes,
+    # we do so only for the intercepts.
+    
+    s.sa2.beta.nb.af.pride[seas] ~ dunif(-10, 10)            # Number of adult females in the pride
+    s.sa2.beta.habitat.woodland[seas, 1] <- 0                # Habitat - grassland (reference level)
+    s.sa2.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)    # Habitat - woodland 
+    
+    
+    # Adult-female (AF) survival
+    
+    s.af.beta.age[seas] ~ dunif(-10, 10)                     # Age
+    s.af.beta.nb.af.pride[seas] ~ dunif(-10, 10)             # Number of adult females in the pride
+    s.af.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)           # Number of nomadic coalitions in the home range
+    s.af.beta.habitat.woodland[seas, 1] <- 0                 # Habitat - grassland (reference level)
+    s.af.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)     # Habitat - woodland 
+    
+    
+    # Young-male (YM) survival
+    
+    s.ym.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)           # Number of nomadic coalitions in the home range
+    s.ym.beta.nb.af.pride[seas] ~ dunif(-10, 10)             # Number of adult females in the pride
+    s.ym.beta.habitat.woodland[seas, 1] <- 0                 # Habitat - grassland (reference level)
+    s.ym.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)     # Habitat - woodland 
+    
+    
+    # Nomadic-male (NM) survival
+    
+    s.nm.beta.coal.size[seas] ~ dunif(-10, 10)               # Coalition size
+    s.nm.beta.habitat.woodland[seas, 1] <- 0                 # Habitat - grassland (reference level)
+    s.nm.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)     # Habitat - woodland 
+    
+    
+    # Resident-male (RM) survival
+    
+    s.rm.beta.coal.size[seas] ~ dunif(-10, 10)               # Coalition size
+    s.rm.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)           # Number of nomadic coalitions in the home range
+    s.rm.beta.habitat.woodland[seas, 1] <- 0                 # Habitat - grassland (reference level)
+    s.rm.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)     # Habitat - woodland
+    
+    
+    # Young-male (YM) emigration
+    
+    emig.ym.beta.habitat.woodland[seas, 1] <- 0              # Habitat - grassland (reference level)
+    emig.ym.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)  # Habitat - woodland
+    
+    
+    # Nomadic-male (NM) takeover
+    
+    takeover.beta.coal.size[seas] ~ dunif(-10, 10)           # Coalition size
+    takeover.beta.habitat.woodland[seas, 1] <- 0             # Habitat - grassland (reference level)
+    takeover.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10) # Habitat - woodland
+    
+    
+    # Resident-male (RM) eviction
+    
+    eviction.beta.coal.size[seas] ~ dunif(-10, 10)           # Coalition size
+    eviction.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)       # Number of nomadic coalitions in the home range
+    eviction.beta.habitat.woodland[seas, 1] <- 0             # Habitat - grassland (reference level) 
+    eviction.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10) # Habitat - woodland
+    
+    
+    # Detection probabilities
+    
+    # Pride individuals
+    dp.pride.beta.habitat.woodland[seas, 1] <- 0             # Habitat - grassland (reference level) 
+    dp.pride.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10) # Habitat - woodland
+    
+    # Nomadic males
+    dp.nm.beta.habitat.woodland[seas, 1] <- 0                # Habitat - grassland (reference level) 
+    dp.nm.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)    # Habitat - woodland
+    
+    # We only estimated season-specific intercepts for the detection probability
+    # of dead individuals.
+  }
+  
+  
+  # Seaosn-specific yearly random effects
+  
+  for(seas in 1:2){
+    
+    # Survival
+    sigma.s.sa1[seas] ~ dunif(0, 10)     # Young subadult
+    sigma.s.sa2[seas] ~ dunif(0, 10)     # Old subadult (both female and male)
+    sigma.s.af[seas] ~ dunif(0, 10)      # Adult female
+    sigma.s.ym[seas] ~ dunif(0, 10)      # Young male
+    sigma.s.nm[seas] ~ dunif(0, 10)      # Nomadic male
+    sigma.s.rm[seas] ~ dunif(0, 10)      # Resident male
+    
+    # Transitions
+    sigma.emig.ym[seas] ~ dunif(0, 10)   # Young-male emigration
+    sigma.t.ym.nm[seas] ~ dunif(0, 10)   # Young-male transition to nomadic male
+    sigma.takeover[seas] ~ dunif(0, 10)  # Nomadic-male takeover
+    sigma.eviction[seas] ~ dunif(0, 10)  # Resident-male eviction
+    
+    # Detection probabilities
+    sigma.dp.pride[seas] ~ dunif(0, 10)  # Pride individual
+    sigma.dp.nm[seas] ~ dunif(0, 10)     # Nomadic male
+    sigma.dp.dead[seas] ~ dunif(0, 10)   # Dead recovery
+    
+  }
+  
+  for(yr in 1:30){
+    
+    for(seas in 1:2){
+      
+      # Survival
+      epsilon.s.sa1[seas, yr] ~ dnorm(0, sd = sigma.s.sa1[seas])       # Young subadult
+      epsilon.s.sa2[seas, yr] ~ dnorm(0, sd = sigma.s.sa2[seas])       # Old subadult (both female and male)
+      epsilon.s.af[seas, yr] ~ dnorm(0, sd = sigma.s.af[seas])         # Adult female
+      epsilon.s.ym[seas, yr] ~ dnorm(0, sd = sigma.s.ym[seas])         # Young male
+      epsilon.s.nm[seas, yr] ~ dnorm(0, sd = sigma.s.nm[seas])         # Nomadic male
+      epsilon.s.rm[seas, yr] ~ dnorm(0, sd = sigma.s.rm[seas])         # Resident male
+      
+      # Transitions
+      epsilon.emig.ym[seas, yr] ~ dnorm(0, sd = sigma.emig.ym[seas])   # Young-male emigration
+      epsilon.t.ym.nm[seas, yr] ~ dnorm(0, sd = sigma.t.ym.nm[seas])   # Young-male transition to nomadic male
+      epsilon.takeover[seas, yr] ~ dnorm(0, sd = sigma.takeover[seas]) # Nomadic-male takeover
+      epsilon.eviction[seas, yr] ~ dnorm(0, sd = sigma.eviction[seas]) # Resident-male eviction
+      
+      # Detection probabilities
+      epsilon.dp.pride[seas, yr] ~ dnorm(0, sd = sigma.dp.pride[seas]) # Pride individual
+      epsilon.dp.nm[seas, yr] ~ dnorm(0, sd = sigma.dp.nm[seas])       # Nomadic male
+      epsilon.dp.dead[seas, yr] ~ dnorm(0, sd = sigma.dp.dead[seas])   # Dead recovery
+      
+    }
+  }
+  
+  
+  # Sampling of missing covariates values using the observed distributions
+  
+  for(t in 1:60){
+    
+    # Group-specific covariates
+    for(g in 1:n_groups){
+      
+      # Number of females in the pride
+      unscaled.nb.af.pride[g, t] ~ T(dnegbin(prob = 0.65, 
+                                             size = nb.af.pride.theta), 
+                                     min.nb.af.pride, max.nb.af.pride)
+      nb.af.pride[g, t] <- (unscaled.nb.af.pride[g, t] - mu.nb.af.pride) / 
+        (2 * sd.nb.af.pride) # Standardize covariate
+      
+      # Coalition size
+      unscaled.coal.size[g, t] ~ T(dpois(coal.size.lambda), 
+                                   min.coal.size, max.coal.size)
+      coal.size[g, t] <- (unscaled.coal.size[g, t] - mu.coal.size) / 
+        (2 * sd.coal.size) # Standardize covariate
+      
+      # Number of nomadic coalitions in the home range
+      unscaled.nb.nm.coal.hr[g, t] ~ T(dnegbin(prob = 0.35, 
+                                               size = nb.nm.coal.hr.theta), 
+                                       min.nb.nm.coal.hr, max.nb.nm.coal.hr)
+      nb.nm.coal.hr[g, t] <- (unscaled.nb.nm.coal.hr[g, t] - mu.nb.nm.coal.hr) / 
+        (2 * sd.nb.nm.coal.hr) # Standardize covariate
+      
+    }
+    
+    # Individual-specific covariate: Habitat
+    for(i in 1:nind){
+      
+      habitat[i, t] <- temp.habitat[i, t] + 1
+      temp.habitat[i, t] ~ dbin(size = 1, prob = habitat.prob)
+      
+    }
+  }
+  
+  
+  # Likelihood 
+  
+  for (i in 1:nind){
+    for(u in 1:11){
+      init[i, u] <- y2[i, lions.first[i]] == u # Get initial state distribution
+    }
+  }
+  
+  # Sample from custom distribution to assign state from first to last lion sighting
+  for (i in 1:nind){
+    y[i, lions.first[i]:lions.last[i]] ~ dDHMM_lionKF(length = (lions.last[i] - lions.first[i] + 1),            # Length of states vector
+                                                      init = init[i, 1:11],                                     # Initial state distribution
+                                                      survSA1 = survSA1[i, lions.first[i]:(lions.last[i])],     # Young-subadult survival
+                                                      survSA2F = survSA2F[i, lions.first[i]:(lions.last[i])],   # Female old-subadult survival
+                                                      survSA2M = survSA2M[i, lions.first[i]:(lions.last[i])],   # Male old-subadult survival
+                                                      survAF = survAF[i, lions.first[i]:(lions.last[i])],       # Adult-female survival
+                                                      survYM = survYM[i, lions.first[i]:(lions.last[i])],       # Young-male survival
+                                                      survNM = survNM[i, lions.first[i]:(lions.last[i])],       # Nomadic-male survival
+                                                      survRM = survRM[i, lions.first[i]:(lions.last[i])],       # Resident-male survival
+                                                      emigYM = emigYM[i, lions.first[i]:(lions.last[i])],       # Nomadic-male emigration
+                                                      transYMNM = transYMNM[i, lions.first[i]:(lions.last[i])], # Young-male transition to nomadic male
+                                                      takeover = takeover[i, lions.first[i]:(lions.last[i])],   # Nomadic-male takeover
+                                                      eviction = eviction[i, lions.first[i]:(lions.last[i])],   # Resident-male eviction
+                                                      dpPride = dpPride[i, lions.first[i]:lions.last[i]],       # Detection of pride individuals
+                                                      dpNM = dpNM[i, lions.first[i]:lions.last[i]],             # Detection of nomadic males
+                                                      dpDead = dpDead[i, lions.first[i]:lions.last[i]])}        # Detection of dead individuals
+})
+
+# Model constants
+
+lions_constants_lionKFDHMM = list(lions.first = lions.first,                                  # First sighting of each individual
+                                   lions.last = lions.last,                                    # Last sighting of each individual
+                                   n.occasions = ncol(lions.ch),                               # Total number of capture occasions
+                                   nind = nrow(lions.ch),                                      # Total number of individuals
+                                   n_groups = nrow(nb.af.pride.unscaled),                      # Number of lion groups
+                                   group = apply(lions.groups,                                 # Group to which an individual belongs in a given timestep
+                                                 c(1, 2), 
+                                                 FUN = function(x) {
+                                                   ifelse(!is.na(x), 
+                                                          which(rownames(nb.af.pride.unscaled) == x), 
+                                                          NA) 
+                                                 }),   
+                                   year = year,                                                # Vector of years
+                                   season = season,                                            # Vector of seasons
+                                   age = age,                                                  # Age of each individual at each timestep
+                                   
+                                   # Parameters for observed distributions and standarization
+                                   nb.af.pride.theta = nb.af.pride.theta,                      # Theta for observed negative binomial distribution
+                                   # of the number of females in a pride
+                                   min.nb.af.pride = min(nb.af.pride.unscaled, na.rm = T),     # Minimum number of females in a pride
+                                   # for observed negative binomial distribution
+                                   max.nb.af.pride = max(nb.af.pride.unscaled, na.rm = T),     # Maximum number of females in a pride
+                                   # for observed negative binomial distribution
+                                   mu.nb.af.pride = mean(nb.af.pride.unscaled, na.rm = T),     # Mean number of females in a pride for standardization
+                                   sd.nb.af.pride = sd(nb.af.pride.unscaled, na.rm = T),       # Standard deviation of number of females in a pride for standardization
+                                   coal.size.lambda = coal.size.lambda,                        # Lambda for observed Poisson distribution of coalition size
+                                   min.coal.size = min(coal.size.unscaled, na.rm = T),         # Minimun coalition size for observed Poisson distribution
+                                   max.coal.size = max(coal.size.unscaled, na.rm = T),         # Maximun coalition size for observed Poisson distribution
+                                   mu.coal.size = mean(coal.size.unscaled, na.rm = T),         # Mean coalition size for standardization
+                                   sd.coal.size = sd(coal.size.unscaled, na.rm = T),           # Standard deviation of coalition size for standardization
+                                   nb.nm.coal.hr.theta = nb.nm.coal.hr.theta,                  # Theta for observed negative binomial distribution
+                                   # of the number of nomadic coalitions in the home range 
+                                   min.nb.nm.coal.hr = min(nb.nm.coal.hr.unscaled, na.rm = T), # Minimum number of nomadic coalitions in the home range
+                                   # for observed negative binomial distribution
+                                   max.nb.nm.coal.hr = max(nb.nm.coal.hr.unscaled, na.rm = T), # Maximum number of nomadic coalitions in the home range
+                                   # for observed negative binomial distribution
+                                   mu.nb.nm.coal.hr = mean(nb.nm.coal.hr.unscaled, na.rm = T), # Mean number of nomadic coalitions in the home range
+                                   # for standardization
+                                   sd.nb.nm.coal.hr = sd(nb.nm.coal.hr.unscaled, na.rm = T),   # Standard deviation of the number of nomadic 
+                                   # coalitions in the home range for standardization
+                                   habitat.prob = inv.logit(habitat.intercept.estimate))       # Observed probability of being in the woodland habitat
+
+
+# Model data
+
+lions.data_lionKFDHMM = list(y = lions.ch,                                    # Capture histories
+                              y2 = lions.ch,                                   # Capture histories for initial state distribution
+                              unscaled.nb.af.pride = nb.af.pride.unscaled,     # Non-standardized number of adult females in a pride 
+                              # for the sampling of missing covariate values
+                              nb.af.pride = nb.af.pride,                       # Standardized number of adult females in a pride for the model
+                              unscaled.coal.size = coal.size.unscaled,         # Non-standardized coalition size for the sampling 
+                              # of missing covariate values
+                              coal.size = coal.size,                           # Standardized coalition size for the model
+                              unscaled.nb.nm.coal.hr = nb.nm.coal.hr.unscaled, # Non-standardized number of nomadic coalitions in 
+                              # the home range for the sampling of missing covariate values
+                              nb.nm.coal.hr = nb.nm.coal.hr,                   # Standardized number of nomadic coalitions in the home range for the model
+                              temp.habitat = habitat - 1,                      # Habitat as a (0, 1) variable for the sampling of missing covariate values
+                              habitat = habitat)                               # Habitat as a (1, 2) variable for the model
+                              
+
+# Parameters monitored
+
+parameters.lionKFDHMM = c(# Intercepts
+                          "mu.s.sa1",    # Young-subadult survival
+                          "mu.s.sa2f",   # Female old-subadult survival 
+                          "mu.s.sa2m",   # Male old-subadult survival
+                          "mu.s.af",     # Adult-female survival
+                          "mu.s.ym",     # Young-male survival
+                          "mu.s.nm",     # Nomadic-male survival
+                          "mu.s.rm",     # Resident-male survival
+                          "mu.emig.ym",  # Young-male emigration
+                          "mu.t.ym.nm",  # Young-male transition to nomadic male
+                          "mu.takeover", # Nomadic-male takeover
+                          "mu.eviction", # Resident-male eviction 
+                          "mu.dp.pride", # Detection of pride individual
+                          "mu.dp.nm",    # Detection of nomadic male
+                          "mu.dp.dead",  # Detection of dead individual
+                          
+                          # Betas
+                          # Young-subadult survival
+                          "s.sa1.beta.nb.nm.coal.hr",       # Number of nomadic coalitions in the home range
+                          "s.sa1.beta.nb.af.pride",         # Number of adult females in the pride
+                          "s.sa1.beta.habitat.woodland",    # Habitat (NA for grassland which is the reference level)
+                          # Old-subadult survival
+                          "s.sa2.beta.nb.nm.coal.hr",       # Number of nomadic coalitions in the home range 
+                          "s.sa2.beta.nb.af.pride",         # Number of adult females in the pride
+                          "s.sa2.beta.habitat.woodland",    # Habitat (NA for grassland which is the reference level)
+                          # Adult-female survival
+                          "s.af.beta.age",                  # Age
+                          "s.af.beta.nb.af.pride",          # Number of adult females in the pride
+                          "s.af.beta.nb.nm.coal.hr",        # Number of nomadic coalitions in the home range
+                          "s.af.beta.habitat.woodland",     # Habitat (NA for grassland which is the reference level)
+                          # Young-male survival
+                          "s.ym.beta.nb.nm.coal.hr",        # Number of nomadic coalitions in the home range
+                          "s.ym.beta.nb.af.pride",          # Number of adult females in the pride
+                          "s.ym.beta.habitat.woodland",     # Habitat (NA for grassland which is the reference level)
+                          # Nomadic-male survival
+                          "s.nm.beta.coal.size",            # Coalition size
+                          "s.nm.beta.habitat.woodland",     # Habitat (NA for grassland which is the reference level)
+                          # Resident-male survival
+                          "s.rm.beta.coal.size",            # Coalition size
+                          "s.rm.beta.nb.nm.coal.hr",        # Number of nomadic coalitions in the home range
+                          "s.rm.beta.habitat.woodland",     # Habitat (NA for grassland which is the reference level)
+                          # Young-male emigration
+                          "emig.ym.beta.habitat.woodland",  # Habitat (NA for grassland which is the reference level)
+                          # Nomadic-male takeover
+                          "takeover.beta.coal.size",        # Coalition size
+                          "takeover.beta.habitat.woodland", # Habitat (NA for grassland which is the reference level) 
+                          # Resident-male eviction
+                          "eviction.beta.coal.size",        # Coalition size
+                          "eviction.beta.nb.nm.coal.hr",    # Number of nomadic coalitions in the home range
+                          "eviction.beta.habitat.woodland", # Habitat (NA for grassland which is the reference level) 
+                          # Pride-individual detection
+                          "dp.pride.beta.habitat.woodland", # Habitat (NA for grassland which is the reference level) 
+                          # Nomadic-male detection
+                          "dp.nm.beta.habitat.woodland",    # Habitat (NA for grassland which is the reference level)
+  
+                          # Random effect sigmas
+                          "sigma.s.sa1",    # Young-subadult survival
+                          "sigma.s.sa2",    # Old-subadult survival
+                          "sigma.s.af",     # Adult-female survival
+                          "sigma.s.ym",     # Young-male survival
+                          "sigma.s.nm",     # Nomadic-male survival
+                          "sigma.s.rm",     # Resident-male survival
+                          "sigma.emig.ym",  # Young-male emigration
+                          "sigma.t.ym.nm",  # Young-male transition to nomadic male
+                          "sigma.takeover", # Nomadic-male takeover
+                          "sigma.eviction", # Resident-male eviction
+                          "sigma.dp.pride", # Pride-individual detection
+                          "sigma.dp.nm",    # Nomadic-male detection
+                          "sigma.dp.dead",  # Dead-individual detection
+                          
+                          # Random effect epsilons
+                          "epsilon.s.sa1",    # Young-subadult survival  
+                          "epsilon.s.sa2",    # Old-subadult survival
+                          "epsilon.s.af",     # Adult-female survival
+                          "epsilon.s.ym",     # Young-male survival
+                          "epsilon.s.nm",     # Nomadic-male survival
+                          "epsilon.s.rm",     # Resident-male survival
+                          "epsilon.emig.ym",  # Young-male emigration
+                          "epsilon.t.ym.nm",  # Young-male transition to nomadic male
+                          "epsilon.takeover", # Nomadic-male takeover
+                          "epsilon.eviction", # Resident-male eviction
+                          "epsilon.dp.pride", # Pride-individual detection
+                          "epsilon.dp.nm",    # Nomadic-male detection
+                          "epsilon.dp.dead")  # Dead-individual detection
+                          
+
+# Model initial values (from previous run)
+
+# Load last 5000 model output
+files.list = file.info(list.files(path = "", 
+                                  pattern = "LionsFullModel_Output_"))[with(file.info(list.files(path = "", 
+                                                                                                 pattern = "LionsFullModel_Output_")), 
+                                                                            order(as.POSIXct(mtime))), ]
+input.file = rownames(files.list)[nrow(files.list)]
+input.file.path = paste("", input.file, sep = "")
+load(input.file.path)
+
+
+# Creating new initial values from last values of previous run
+
+ncpus = 4 # Number of cores
+last.iteration = nrow(res.iter.set[[1]]) # Last iteration of the previous run
+
+
+# Initial values for the sampling of covariates with missing values
+
+# Number of adult females in a pride
+inits.nb.af.pride = function(cov){ # cov is the observed data
+  
+  cov.new = matrix(NA, nrow = nrow(cov), ncol = ncol(cov)) # Empty matrix
+  
+  # Replace NAs by sampling the observed negative binomial distribution
+  for(i in 1:nrow(cov.new)){
+    
+    which.na = which(is.na(cov[i, ]))
+    if(length(which.na) == 0){next}
+    cov.new[i, which.na] = rnbinom(length(which.na), size = nb.af.pride.theta, prob = 0.65)
+    
+  }
+  
+  # Bound the sampled values to the minimum and maximum observed values
+  cov.new[which(cov.new > max(cov, na.rm = T))] = max(cov, na.rm = T)
+  cov.new[which(cov.new < min(cov, na.rm = T))] = min(cov, na.rm = T)
+  
+  return(cov.new) # Full covariate data
+}
+
+
+# Coalition size
+inits.coal.size = function(cov){ # cov is the observed data
+  
+  cov.new = matrix(NA, nrow = nrow(cov), ncol = ncol(cov)) # Empty matrix
+  
+  # Replace NAs by sampling the observed Poisson distribution
+  for(i in 1:nrow(cov.new)){
+    
+    which.na = which(is.na(cov[i, ]))
+    if(length(which.na) == 0){next}
+    cov.new[i, which.na] = rpois(length(which.na), coal.size.lambda) + 1
+    
+  }
+  
+  # Bound the sampled values to the minimum and maximum observed values
+  cov.new[which(cov.new > max(cov, na.rm = T))] = max(cov, na.rm = T)
+  cov.new[which(cov.new < min(cov, na.rm = T))] = min(cov, na.rm = T)
+  
+  return(cov.new) # Full covariate data
+}
+
+
+# Number of nomadic coalitions in the home range
+inits.nb.nm.coal.hr = function(cov){ # cov is the observed data
+  
+  cov.new = matrix(NA, nrow = nrow(cov), ncol = ncol(cov)) # Empty matrix
+  
+  # Replace NAs by sampling the observed negative binomial distribution
+  for(i in 1:nrow(cov.new)){
+    
+    which.na = which(is.na(cov[i, ]))
+    if(length(which.na) == 0){next}
+    cov.new[i, which.na] = rnbinom(length(which.na), size = nb.nm.coal.hr.theta, prob = 0.35)
+    
+  }
+  
+  # Bound the sampled values to the minimum and maximum observed values
+  cov.new[which(cov.new > max(cov, na.rm = T))] = max(cov, na.rm = T)
+  cov.new[which(cov.new < min(cov, na.rm = T))] = min(cov, na.rm = T)
+  
+  return(cov.new) # Full covariate data
+}
+
+
+# Habitat
+inits.habitat = function(cov){ # cov is the observed data
+  
+  cov.new = matrix(NA, nrow = nrow(cov), ncol = ncol(cov)) # Empty matrix
+  
+  # Replace NAs by sampling the observed binomial distribution
+  for(i in 1:nrow(cov.new)){
+    
+    which.na = which(is.na(cov[i, ]))
+    if(length(which.na) == 0){next}
+    cov.new[i, which.na] = rbinom(length(which.na), size = 1, prob = 0.3)
+    
+  }  
+  
+  return(cov.new) # Full covariate data
+}
+
+
+# Sample initial values for each core
+
+initials.nb.af.pride.unscaled = list()
+initials.coal.size.unscaled = list()
+initials.nb.nm.coal.hr.unscaled = list()
+initials.habitat = list()
+
+for(cpu in 1:ncpus){
+    
+  initials.nb.af.pride.unscaled[[cpu]] = inits.nb.af.pride(nb.af.pride.unscaled)
+
+  initials.coal.size.unscaled[[cpu]] = inits.coal.size(coal.size.unscaled)
+
+  initials.nb.nm.coal.hr.unscaled[[cpu]] = inits.nb.nm.coal.hr(nb.nm.coal.hr.unscaled)
+
+  initials.habitat[[cpu]] = inits.habitat(habitat)
+    
+}
+
+
+# Getting values from last iteration in a list
+init.val.prev.set = list()
+
+for(cpu in 1:ncpus){
+    
+    param.list = list()
+    
+    for(param in parameters.lionKFDHMM){
+        
+      # Differentiate between the parameter for the effect of
+      # nomadic males on old subadults and all the other parameters
+      # because the former has only one estimate and the latter have 
+      # one estimate per season
+      if(param != "s.sa2.beta.nb.nm.coal.hr") param.regex = paste(param, "\\[", sep = "")
+      
+      else param.regex = "s.sa2.beta.nb.nm.coal.hr"
+      
+      # Store in the list
+      param.list[[param]] = res.iter.set[[cpu]][last.iteration, grep(param.regex, colnames(res.iter.set[[cpu]]))]
+    
+    }
+    
+    init.val.prev.set[[cpu]] = param.list 
+}
+
+
+# Formatting the values in param.list to match the format of initial values function
+
+for(cpu in 1:ncpus){
+    
+  for(elem in 1:length(init.val.prev.set[[cpu]])){
+      
+    init.val.prev.set[[cpu]][[elem]] = as.numeric(init.val.prev.set[[cpu]][[elem]])
+  }
+}
+
+
+# Function to get the list of initial values
+
+lions_new_inits_lionKFDHMM = function(cpu){
+  list(# Intercepts
+       mu.s.sa1 = init.val.prev.set[[cpu]]$mu.s.sa1,        # Young-subadult survival
+       mu.s.sa2f = init.val.prev.set[[cpu]]$mu.s.sa2f,      # Female old-subadult survival 
+       mu.s.sa2m = init.val.prev.set[[cpu]]$mu.s.sa2m,      # Male old-subadult survival
+       mu.s.af = init.val.prev.set[[cpu]]$mu.s.af,          # Adult-female survival
+       mu.s.ym = init.val.prev.set[[cpu]]$mu.s.ym,          # Young-male survival
+       mu.s.nm = init.val.prev.set[[cpu]]$mu.s.nm,          # Nomadic-male survival
+       mu.s.rm = init.val.prev.set[[cpu]]$mu.s.rm,          # Resident-male survival
+       mu.emig.ym = init.val.prev.set[[cpu]]$mu.emig.ym,    # Young-male emigration
+       mu.t.ym.nm = init.val.prev.set[[cpu]]$mu.t.ym.nm,    # Young-male transition to nomadic male
+       mu.takeover = init.val.prev.set[[cpu]]$mu.takeover,  # Nomadic-male takeover
+       mu.eviction = init.val.prev.set[[cpu]]$mu.eviction,  # Resident-male eviction 
+       mu.dp.pride = init.val.prev.set[[cpu]]$mu.dp.pride,  # Detection of pride individual
+       mu.dp.nm = init.val.prev.set[[cpu]]$mu.dp.nm,        # Detection of nomadic male
+       mu.dp.dead = init.val.prev.set[[cpu]]$mu.dp.dead,    # Detection of dead individual
+       
+       # Betas
+       # Young-subadult survival
+       s.sa1.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$s.sa1.beta.nb.nm.coal.hr,                           # Number of nomadic coalitions in the home range
+       s.sa1.beta.nb.af.pride = init.val.prev.set[[cpu]]$s.sa1.beta.nb.af.pride,                               # Number of adult females in the pride
+       s.sa1.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.sa1.beta.habitat.woodland, 2, 2),       # Habitat (NA for grassland which is the reference level)
+       # Old-subadult survival
+       s.sa2.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$s.sa2.beta.nb.nm.coal.hr,                           # Number of nomadic coalitions in the home range 
+       s.sa2.beta.nb.af.pride = init.val.prev.set[[cpu]]$s.sa2.beta.nb.af.pride,                               # Number of adult females in the pride
+       s.sa2.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.sa2.beta.habitat.woodland, 2, 2),       # Habitat (NA for grassland which is the reference level)
+       # Adult-female survival
+       s.af.beta.age = init.val.prev.set[[cpu]]$s.af.beta.age,                                                 # Age
+       s.af.beta.nb.af.pride = init.val.prev.set[[cpu]]$s.af.beta.nb.af.pride,                                 # Number of adult females in the pride
+       s.af.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$s.af.beta.nb.nm.coal.hr,                             # Number of nomadic coalitions in the home range
+       s.af.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.af.beta.habitat.woodland, 2, 2),         # Habitat (NA for grassland which is the reference level)
+       # Young-male survival
+       s.ym.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$s.ym.beta.nb.nm.coal.hr,                             # Number of nomadic coalitions in the home range
+       s.ym.beta.nb.af.pride = init.val.prev.set[[cpu]]$s.ym.beta.nb.af.pride,                                 # Number of adult females in the pride
+       s.ym.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.ym.beta.habitat.woodland, 2, 2),         # Habitat (NA for grassland which is the reference level)
+       # Nomadic-male survival
+       s.nm.beta.coal.size = init.val.prev.set[[cpu]]$s.nm.beta.coal.size,                                     # Coalition size
+       s.nm.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.nm.beta.habitat.woodland, 2, 2),         # Habitat (NA for grassland which is the reference level)
+       # Resident-male survival
+       s.rm.beta.coal.size = init.val.prev.set[[cpu]]$s.rm.beta.coal.size,                                     # Coalition size
+       s.rm.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$s.rm.beta.nb.nm.coal.hr,                             # Number of nomadic coalitions in the home range
+       s.rm.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$s.rm.beta.habitat.woodland, 2, 2),         # Habitat (NA for grassland which is the reference level)
+       # Young-male emigration
+       emig.ym.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$emig.ym.beta.habitat.woodland, 2, 2),   # Habitat (NA for grassland which is the reference level) 
+       # Nomadic-male takeover
+       takeover.beta.coal.size = init.val.prev.set[[cpu]]$takeover.beta.coal.size,                             # Coalition size
+       takeover.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$takeover.beta.habitat.woodland, 2, 2), # Habitat (NA for grassland which is the reference level) 
+       # Resident-male eviction
+       eviction.beta.coal.size = init.val.prev.set[[cpu]]$eviction.beta.coal.size,                             # Coalition size
+       eviction.beta.nb.nm.coal.hr = init.val.prev.set[[cpu]]$eviction.beta.nb.nm.coal.hr,                     # Number of nomadic coalitions in the home range
+       eviction.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$eviction.beta.habitat.woodland, 2, 2), # Habitat (NA for grassland which is the reference level)
+       # Pride-individual detection
+       dp.pride.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$dp.pride.beta.habitat.woodland, 2, 2), # Habitat (NA for grassland which is the reference level) 
+       # Nomadic-male detection
+       dp.nm.beta.habitat.woodland = matrix(init.val.prev.set[[cpu]]$dp.nm.beta.habitat.woodland, 2, 2),       # Habitat (NA for grassland which is the reference level)
+       
+       # Random effect sigmas
+       sigma.s.sa1 = init.val.prev.set[[cpu]]$sigma.s.sa1,       # Young-subadult survival
+       sigma.s.sa2 = init.val.prev.set[[cpu]]$sigma.s.sa2,       # Old-subadult survival
+       sigma.s.af = init.val.prev.set[[cpu]]$sigma.s.af,         # Adult-female survival
+       sigma.s.ym = init.val.prev.set[[cpu]]$sigma.s.ym,         # Young-male survival
+       sigma.s.nm = init.val.prev.set[[cpu]]$sigma.s.nm,         # Nomadic-male survival
+       sigma.s.rm = init.val.prev.set[[cpu]]$sigma.s.rm,         # Resident-male survival
+       sigma.emig.ym = init.val.prev.set[[cpu]]$sigma.emig.ym,   # Young-male emigration
+       sigma.t.ym.nm = init.val.prev.set[[cpu]]$sigma.t.ym.nm,   # Young-male transition to nomadic male
+       sigma.takeover = init.val.prev.set[[cpu]]$sigma.takeover, # Nomadic-male takeover
+       sigma.eviction = init.val.prev.set[[cpu]]$sigma.eviction, # Resident-male eviction
+       sigma.dp.pride = init.val.prev.set[[cpu]]$sigma.dp.pride, # Pride-individual detection
+       sigma.dp.nm = init.val.prev.set[[cpu]]$sigma.dp.nm,       # Nomadic-male detection
+       sigma.dp.dead = init.val.prev.set[[cpu]]$sigma.dp.dead,   # Dead-individual detection
+       
+       # Random effect epsilons 
+       epsilon.s.sa1 = matrix(init.val.prev.set[[cpu]]$epsilon.s.sa1,       # Young-subadult survival
+                              nrow = max(season), ncol = max(year)),
+       epsilon.s.sa2 = matrix(init.val.prev.set[[cpu]]$epsilon.s.sa2,       # Old-subadult survival
+                              nrow = max(season), ncol = max(year)),
+       epsilon.s.af = matrix(init.val.prev.set[[cpu]]$epsilon.s.af,         # Adult-female survival
+                             nrow = max(season), ncol = max(year)),
+       epsilon.s.ym = matrix(init.val.prev.set[[cpu]]$epsilon.s.ym,         # Young-male survival
+                             nrow = max(season), ncol = max(year)),
+       epsilon.s.nm = matrix(init.val.prev.set[[cpu]]$epsilon.s.nm,         # Nomadic-male survival
+                             nrow = max(season), ncol = max(year)),
+       epsilon.s.rm = matrix(init.val.prev.set[[cpu]]$epsilon.s.rm,         # Resident-male survival
+                             nrow = max(season), ncol = max(year)),
+       epsilon.emig.ym = matrix(init.val.prev.set[[cpu]]$epsilon.emig.ym,   # Young-male emigration
+                                nrow = max(season), ncol = max(year)),
+       epsilon.t.ym.nm = matrix(init.val.prev.set[[cpu]]$epsilon.t.ym.nm,   # Young-male transition to nomadic male
+                                nrow = max(season), ncol = max(year)),
+       epsilon.takeover = matrix(init.val.prev.set[[cpu]]$epsilon.takeover, # Nomadic-male takeover
+                                 nrow = max(season), ncol = max(year)),
+       epsilon.eviction = matrix(init.val.prev.set[[cpu]]$epsilon.eviction, # Resident-male eviction
+                                 nrow = max(season), ncol = max(year)),
+       epsilon.dp.pride = matrix(init.val.prev.set[[cpu]]$epsilon.dp.pride, # Pride-individual detection
+                                 nrow = max(season), ncol = max(year)),
+       epsilon.dp.nm = matrix(init.val.prev.set[[cpu]]$epsilon.dp.nm,       # Nomadic-male detection
+                              nrow = max(season), ncol = max(year)),
+       epsilon.dp.dead = matrix(init.val.prev.set[[cpu]]$epsilon.dp.dead,   # Dead-individual detection
+                                nrow = max(season), ncol = max(year)),
+       
+       # Missing covariate initial values
+       unscaled.nb.af.pride = initials.nb.af.pride.unscaled[[cpu]],     # Non-standardized number of adult females in a pride
+       unscaled.coal.size = initials.coal.size.unscaled[[cpu]],         # Non-standardized coalition size
+       unscaled.nb.nm.coal.hr = initials.nb.nm.coal.hr.unscaled[[cpu]], # Non-standardized number of nomadic coalitions in the home range
+       temp.habitat = initials.habitat[[cpu]])                          # Habitat with (0, 1) values
+}
+
+
+# Sample initial values
+init.val = list()
+
+for(cpu in 1:ncpus){
+  
+  init.val[[cpu]] = lions_new_inits_lionKFDHMM(cpu)
+  
+}
+
+rm(res.iter.set) # Remove previous model output from the environment
+                 # to avoid loading it on each core
+
+
+## 2.2. Fitting the model ----
+# -----------------------
+
+# Function to parallelize the chains
+startnimbleMCMC = function(sim){ # sim = computer core
+  
+  if (sim > 1) {      # Give each core a random seed
+    rm(".Random.seed", envir = .GlobalEnv); runif(1)
+  }
+  
+  # Run 5000 iterations of the model
+  nimbleMCMC(code = lions_code_lionKFDHMM,
+             constants = lions_constants_lionKFDHMM,
+             data = lions.data_lionKFDHMM,
+             monitors = parameters.lionKFDHMM,
+             inits = init.val[[sim]],
+             niter = 5000,
+             nburnin = 0,
+             nchains = 1,
+             thin = 1,
+             samplesAsCodaMCMC = TRUE)
+  
+}
+
+
+## PROCESS ## 
+
+# Set initial values on all cpus
+# Make a list for every parameter (or vector if parameters are just single numbers).
+# All lists have as many entries as there are chains.
+# If this is the first run, you provide initial parameter values, if this is not the first run,
+# read in as initial values the last values of the previous run
+
+# Set up parallel environment
+library(snowfall)
+
+sfInit(parallel = TRUE, cpus = ncpus, slaveOutfile = "MCMCProgress.txt") # Initialisation and progress output file
+sfExport(list = c(ls(), ".Random.seed")) # Export current environment to each core
+sfLibrary(nimble, warn.conflicts = FALSE) # Load nimble 
+sfLibrary("snowfall", character.only = TRUE) # Load snowfall
+
+# Results of each set of iterations are saved to a file
+res.iter.set = sfClusterApplyLB(1:ncpus, startnimbleMCMC) # Run chains on one core each
+
+# Setup filename based on data and time and save output
+filename_temp = paste0(sub('\\..*', '', "LionsFullModel_Output"), format(Sys.time(),'_%m%d_%H%M%S'))
+filename = paste0(filename_temp,'.RData')
+
+save(res.iter.set, file = filename)
+sfStop() # Stop parallelization
+
+
+## 2.3. Saving individual chains as csv files ----
+# -------------------------------------------
+
+# Extracting individual chains from model output
+chain1 = res.iter.set[[1]]
+chain2 = res.iter.set[[2]]
+chain3 = res.iter.set[[3]]
+chain4 = res.iter.set[[4]]
+
+rm(res.iter.set) # Remove model output from environment
+
+# Set up file names
+chain1.filename = paste0("/home/econqu/scratch/Lions_Multistate/Models_Output_Chains/", filename_temp, "_Chain1", '.csv')
+chain2.filename = paste0("/home/econqu/scratch/Lions_Multistate/Models_Output_Chains/", filename_temp, "_Chain2", '.csv')
+chain3.filename = paste0("/home/econqu/scratch/Lions_Multistate/Models_Output_Chains/", filename_temp, "_Chain3", '.csv')
+chain4.filename = paste0("/home/econqu/scratch/Lions_Multistate/Models_Output_Chains/", filename_temp, "_Chain4", '.csv')
+
+# Format chains
+chain1 = as.matrix(chain1)
+chain2 = as.matrix(chain2)
+chain3 = as.matrix(chain3)
+chain4 = as.matrix(chain4)
+
+chain1 = as.data.frame(chain1)
+chain2 = as.data.frame(chain2)
+chain3 = as.data.frame(chain3)
+chain4 = as.data.frame(chain4)
+
+# Save chains
+write.csv(chain1, file = chain1.filename, row.names = F)
+write.csv(chain2, file = chain2.filename, row.names = F)
+write.csv(chain3, file = chain3.filename, row.names = F)
+write.csv(chain4, file = chain4.filename, row.names = F)
