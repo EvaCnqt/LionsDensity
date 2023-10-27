@@ -40,11 +40,8 @@ nimbleOptions(disallow_multivariate_argument_expressions = F)
 # Custom distribution
 source("RScripts/00_dDHMM_lionKF.R")
 
-# Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
-
 # Individual capture histories
-lions.ch = read.csv("Data/02_LionsCaptureHistories.csv", row.names = 1)
+lions.ch = read.csv("Data/01_LionsCaptureHistories.csv", row.names = 1)
 lions.ch = as.matrix(lions.ch)
 
 
@@ -56,14 +53,14 @@ lions.ch = as.matrix(lions.ch)
 
 
 # Year and season
-year = read.csv("Data/031_Covariate_Year.csv", stringsAsFactors = F)$x
+year = read.csv("Data/021_Covariate_Year.csv", stringsAsFactors = F)$x
 year = rep(c(1:30), each = 2)
 
-season = read.csv("Data/032_Covariate_Season.csv", stringsAsFactors = F)$x
+season = read.csv("Data/022_Covariate_Season.csv", stringsAsFactors = F)$x
 
 
 # Habitat
-habitat = read.csv("Data/033_Covariate_Habitat.csv", row.names = 1)
+habitat = read.csv("Data/023_Covariate_Habitat.csv", row.names = 1)
 habitat = as.matrix(habitat)
 
 # Distribution
@@ -77,7 +74,7 @@ habitat = habitat + 1 # To avoid zeros in the NIMBLE model
 # Density-dependent covariates
 
 # Number of females in a pride
-nb.af.pride.unscaled = read.csv("Data/034_Covariate_NbAFpride.csv", 
+nb.af.pride.unscaled = read.csv("Data/024_Covariate_NbAFpride.csv", 
                                 stringsAsFactors = F, 
                                 row.names = 1)
 nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
@@ -103,7 +100,7 @@ nb.af.pride.theta = negbin.model$theta
 
 
 # Age
-age.unscaled = read.csv("Data/035_Covariate_Age.csv", row.names = 1)
+age.unscaled = read.csv("Data/025_Covariate_Age.csv", row.names = 1)
 age.unscaled = as.matrix(age.unscaled)
 range(age.unscaled, na.rm = T)
 age = (age.unscaled - mean(age.unscaled, na.rm = T)) / 
@@ -111,7 +108,7 @@ age = (age.unscaled - mean(age.unscaled, na.rm = T)) /
 
 
 # Male coalition size 
-coal.size.unscaled = read.csv("Data/036_Covariate_CoalSize.csv", row.names = 1)
+coal.size.unscaled = read.csv("Data/026_Covariate_CoalSize.csv", row.names = 1)
 coal.size.unscaled = as.matrix(coal.size.unscaled)
 range(coal.size.unscaled, na.rm = T)
 coal.size = (coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / 
@@ -145,7 +142,7 @@ coal.size.lambda = exp(poisson.model$coefficients)
 
 # Number of nomadic coalitions in the home range of a pride or 
 # a resident male coalition
-nb.nm.coal.hr.unscaled = read.csv("Data/037_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = read.csv("Data/027_Covariate_NbNMCoalHR.csv", row.names = 1)
 nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
 range(nb.nm.coal.hr.unscaled, na.rm = T)
 nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / 
@@ -174,6 +171,11 @@ hist(rnbinom(100000, negbin_model$theta, prob = 0.35), freq = F, col = "green", 
 nb.nm.coal.hr.theta = negbin.model$theta
 
 
+## 1.5. Lions groups across time ----
+# ------------------------------
+
+lions.groups = read.csv("Data/03_LionsGroups.csv", row.names = 1)
+
 
 
 ###########################################################################
@@ -197,20 +199,7 @@ lions_first = apply(lions_ch, 1, get_first)
 lions_last = apply(lions_ch, 1, get_last)
 
 
-## 2.2. Remove lions seen only in the last occasion ----
-# -------------------------------------------------
-
-lions_ch = lions_ch[- which(lions_first == lions_last), ]
-
-age = age[- which(lions_first == lions_last), ]
-age_unscaled = age_unscaled[- which(lions_first == lions_last), ]
-habitat = habitat[- which(lions_first == lions_last), ]
-
-lions_first = apply(lions_ch, 1, get_first)
-lions_last  = apply(lions_ch, 1, get_last)
-
-
-## 2.3. Subset data if needed ----
+## 2.2. Subset data if needed ----
 # ---------------------------
 
 reduced_data = F
@@ -230,57 +219,6 @@ if(reduced_data){
   lions_first = apply(lions_ch, 1, get_first)
   lions_last  = apply(lions_ch, 1, get_last)
 }
-
-
-## 2.4. Create group matrix ----
-# -------------------------
-
-# The group matrix will enable to find the density-dependent covariates
-# corresponding to a given individual based on its group (pride or nomadic coalition)
-
-lions_groups = matrix(NA, nrow = nrow(lions_ch), ncol = ncol(lions_ch), 
-                      dimnames = list(rownames(lions_ch), seq(1:60))) # Empty matrix
-
-# Fill in the matrix
-for(lion in rownames(lions_groups)){
-  
-  lions_groups[lion, lions_data$n_census[lions_data$id == lion & lions_data$n_census >= lions_first[lion]]] = 
-    lions_data$group[lions_data$id == lion & lions_data$n_census >= lions.first[lion]]
-}
-
-# Filling in NAs at t assuming lions stayed in the same group as at t-1
-for(lion in rownames(lions_groups)){
-  
-  for(t in as.numeric(which(is.na(lions_groups[lion, ])))){
-    
-    if(all(is.na(lions_groups[lion, ]))){break} # If there are only NAs, 
-                                                # go to the next individual
-    
-    if(t < as.numeric(lions_first[lion])){next} # If the NA is before the 
-                                                # first sighting, continue to 
-                                                # the next iteration
-    
-    lions_groups[lion, t] = lions_groups[lion, t-1]
-   
-  }
-}
-
-# Remove females only seen as nomad because we cannot assign them group covariates
-nomadic_females = which(apply(lions_groups, 1, function(x) all(is.na(x)))) 
-
-lions.ch = lions.ch[- nomadic_females, ]
-age = age[- nomadic_females, ]
-age_unscaled = age_unscaled[- nomadic_females, ]
-habitat = habitat[- nomadic_females, ]
-lions_groups = lions_groups[- nomadic_females, ]
-
-# Check that there are no NAs left
-lions_groups[which(apply(lions_groups, 1, function(x) any(is.na(x)))), ]
-lions_ch[which(apply(lions_groups, 1, function(x) any(is.na(x)))), ]
-
-# Get new first and last sightings
-lions_first = apply(lions_ch, 1, get_first)
-lions_last  = apply(lions_ch, 1, get_last)
 
 
 
@@ -1123,7 +1061,7 @@ ncpus = 4 # Number of cores
 # Set up parallel environment
 library(snowfall)
 
-sfInit(parallel = TRUE, cpus = ncpus, slaveOutfile = "MCMCProgress.txt") # Initialisation and progress output file
+sfInit(parallel = TRUE, cpus = ncpus, slaveOutfile = "Output/MCMCProgress.txt") # Initialisation and progress output file
 sfExport(list = c(ls(), ".Random.seed")) # Export current environment to each core
 sfLibrary(nimble, warn.conflicts = FALSE) # Load nimble 
 sfLibrary("snowfall", character.only = TRUE) # Load snowfall
@@ -1132,43 +1070,8 @@ sfLibrary("snowfall", character.only = TRUE) # Load snowfall
 res.iter.set = sfClusterApplyLB(1:ncpus, startnimbleMCMC) # Run chains on one core each
 
 # Setup filename based on data and time and save output
-filename_temp = paste0(sub('\\..*', '', "LionsFullModel_Output"), format(Sys.time(),'_%m%d_%H%M%S'))
+filename_temp = paste0(sub('\\..*', '', "Output/LionsFullMultistateModel_Output"), format(Sys.time(),'_%m%d_%H%M%S'))
 filename = paste0(filename_temp,'.RData')
 
 save(res.iter.set, file = filename)
 sfStop() # Stop parallelization
-
-
-## 3.3. Saving individual chains as csv files ----
-# -------------------------------------------
-
-# Extracting individual chains from model output
-chain1 = res.iter.set[[1]]
-chain2 = res.iter.set[[2]]
-chain3 = res.iter.set[[3]]
-chain4 = res.iter.set[[4]]
-
-rm(res.iter.set) # Remove model output from environment
-
-# Set up file names
-chain1.filename = paste0(filename_temp, "_Chain1", '.csv')
-chain2.filename = paste0(filename_temp, "_Chain2", '.csv')
-chain3.filename = paste0(filename_temp, "_Chain3", '.csv')
-chain4.filename = paste0(filename_temp, "_Chain4", '.csv')
-
-# Format chains
-chain1 = as.matrix(chain1)
-chain2 = as.matrix(chain2)
-chain3 = as.matrix(chain3)
-chain4 = as.matrix(chain4)
-
-chain1 = as.data.frame(chain1)
-chain2 = as.data.frame(chain2)
-chain3 = as.data.frame(chain3)
-chain4 = as.data.frame(chain4)
-
-# Save chains
-write.csv(chain1, file = chain1.filename, row.names = F)
-write.csv(chain2, file = chain2.filename, row.names = F)
-write.csv(chain3, file = chain3.filename, row.names = F)
-write.csv(chain4, file = chain4.filename, row.names = F)

@@ -33,72 +33,17 @@ library(bayestestR)
 ## 1.3. Loading data ----
 # ------------------
 
-# Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
-
 # Individual capture histories
-lions.ch = read.csv("Data/02_LionsCaptureHistories.csv", row.names = 1)
+lions.ch = read.csv("Data/01_LionsCaptureHistories.csv", row.names = 1)
 lions.ch = as.matrix(lions.ch)
 
 # Simulated datasets
-load("SimulatedData/Simulated_CH")
+load("Output/Simulated_CH")
 data_simulation_output = c(data_simulation_output[[1]], # Merge simulated datasets
                            data_simulation_output[[2]], # from each parallel core
                            data_simulation_output[[3]],
                            data_simulation_output[[4]], 
                            data_simulation_output[[5]])
-
-
-## 1.4. Covariates ----
-# ----------------
-
-# Year and season
-year = read.csv("Data/031_Covariate_Year.csv", stringsAsFactors = F)$x
-year = rep(c(1:30), each = 2)
-
-season = read.csv("Data/032_Covariate_Season.csv", stringsAsFactors = F)$x
-
-
-# Habitat
-habitat = read.csv("Data/033_Covariate_Habitat.csv", row.names = 1)
-habitat = as.matrix(habitat)
-
-
-# Density-dependent covariates
-
-# Number of females in a pride
-nb.af.pride.unscaled = read.csv("Data/034_Covariate_NbAFpride.csv", 
-                                stringsAsFactors = F, 
-                                row.names = 1)
-nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
-range(nb.af.pride.unscaled, na.rm = T)
-nb.af.pride = (nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / 
-  (2 * sd(nb.af.pride.unscaled, na.rm = T)) # Standardize covariate
-
-
-# Age
-age.unscaled = read.csv("Data/035_Covariate_Age.csv", row.names = 1)
-age.unscaled = as.matrix(age.unscaled)
-range(age.unscaled, na.rm = T)
-age = (age.unscaled - mean(age.unscaled, na.rm = T)) / 
-  (2 * sd(age.unscaled, na.rm = T)) # Standardize covariate
-
-
-# Male coalition size 
-coal.size.unscaled = read.csv("Data/036_Covariate_CoalSize.csv", row.names = 1)
-coal.size.unscaled = as.matrix(coal.size.unscaled)
-range(coal.size.unscaled, na.rm = T)
-coal.size = (coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / 
-  (2 * sd(coal.size.unscaled, na.rm = T)) # Standardize covariate
-
-
-# Number of nomadic coalitions in the home range of a pride or 
-# a resident male coalition
-nb.nm.coal.hr.unscaled = read.csv("Data/037_Covariate_NbNMCoalHR.csv", row.names = 1)
-nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
-range(nb.nm.coal.hr.unscaled, na.rm = T)
-nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / 
-  (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T)) # Standardize covariate
 
 
 
@@ -112,77 +57,27 @@ nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T
 ## 2.1. Getting the first and last capture occasion of each lion ----
 # --------------------------------------------------------------
 
-get.first = function(x) min(which(x != 13)) # First observed state
-get.last  = function(x){
+get_first = function(x) min(which(x != 13)) # First observed state
+get_last  = function(x){
   
   if(any(x == 11)){which(x == 11)} # Dead recovery occasion
   else{length(x)} # Otherwise, last capture occasion
   
 }
 
-lions.first = apply(lions.ch, 1, get.first)
-lions.last  = apply(lions.ch, 1, get.last)
+lions_first = apply(lions_ch, 1, get_first)
+lions_last = apply(lions_ch, 1, get_last)
 
 
-## 2.2. Remove lions seen only in the last occasion ----
-# -------------------------------------------------
-
-lions.ch = lions.ch[- which(lions.first == lions.last), ]
-
-age = age[- which(lions.first == lions.last), ]
-age.unscaled = age.unscaled[- which(lions.first == lions.last), ]
-habitat = habitat[- which(lions.first == lions.last), ]
-
-lions.first = apply(lions.ch, 1, get.first)
-lions.last  = apply(lions.ch, 1, get.last)
 
 
-## 2.3. Create group matrix ----
-# -------------------------
+###########################################################################
+#
+# 3. Loading model output ----
+#
+###########################################################################
 
-lions.groups = matrix(NA, nrow = nrow(lions.ch), ncol = ncol(lions.ch), 
-                      dimnames = list(rownames(lions.ch), seq(1:60))) # Empty matrix
-
-# Fill in the matrix
-for(lion in rownames(lions.groups)){
-  
-  lions.groups[lion, lions.data$n_census[lions.data$id == lion & lions.data$n_census >= lions_first[lion]]] = 
-    lions.data$group[lions.data$id == lion & lions.data$n_census >= lions.first[lion]]
-}
-
-# Filling in NAs at t assuming lions stayed in the same group as at t-1
-for(lion in rownames(lions.groups)){
-  
-  for(t in as.numeric(which(is.na(lions.groups[lion, ])))){
-    
-    if(all(is.na(lions.groups[lion, ]))){break} # If there are only NAs, 
-    # go to the next individual
-    
-    if(t < as.numeric(lions.first[lion])){next} # If the NA is before the 
-    # first sighting, continue to 
-    # the next iteration
-    
-    lions.groups[lion, t] = lions.groups[lion, t-1]
-    
-  }
-}
-
-# Remove females only seen as nomad because we cannot assign them group covariates
-nomadic.females = which(apply(lions.groups, 1, function(x) all(is.na(x)))) 
-
-lions.ch = lions.ch[- nomadic.females, ]
-age = age[- nomadic.females, ]
-age.unscaled = age.unscaled[- nomadic.females, ]
-habitat = habitat[- nomadic.females, ]
-lions_groups = lions_groups[- nomadic.females, ]
-
-# Check that there are no NAs left
-lions.groups[which(apply(lions.groups, 1, function(x) any(is.na(x)))), ]
-lions.ch[which(apply(lions.groups, 1, function(x) any(is.na(x)))), ]
-
-# Get new first and last sightings
-lions.first = apply(lions.ch, 1, get.first)
-lions.last  = apply(lions.ch, 1, get.last)
+lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
 
 
 
