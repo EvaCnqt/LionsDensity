@@ -33,17 +33,9 @@ library(bayestestR)
 ## 1.3. Loading data ----
 # ------------------
 
-# Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
-
 # MCMC samples
-load("LionFullModel_Repro_Rec_Output.RData")
+lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
 
-# Full output as a matrix
-lions_output_fullGLMM = as.matrix(rbind(lions_results_fullGLMM[[1]],
-                                        lions_results_fullGLMM[[2]],
-                                        lions_results_fullGLMM[[3]],
-                                        lions_results_fullGLMM[[4]])) 
 
 
 
@@ -52,11 +44,6 @@ lions_output_fullGLMM = as.matrix(rbind(lions_results_fullGLMM[[1]],
 # 2. Formatting dataset ----
 #
 ###########################################################################
-
-# Subset female data only and remove nomadic females
-females.data = lions.data[which(lions.data$stage == "AF"), ]
-females.data = females.data[- which(females.data$pride == "NO"), ]
-
 
 # Covariates
 pop.size = read.csv("Data/02_Covariate_PopulationSize.csv")$x

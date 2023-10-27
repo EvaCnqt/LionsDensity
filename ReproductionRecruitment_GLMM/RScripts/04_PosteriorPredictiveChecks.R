@@ -35,17 +35,13 @@ library(viridis)
 # ------------------
 
 # Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
+females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 # MCMC samples
-load("LionFullModel_Repro_Rec_Output.RData")
-lions_output_fullGLMM = as.matrix(rbind(lions_output_fullGLMM[[1]],
-                                        lions_output_fullGLMM[[2]],
-                                        lions_output_fullGLMM[[3]],
-                                        lions_output_fullGLMM[[4]]))
+lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
 
 # Simulated datasets
-load("Repro_Rec_Simulated_Data.RData")
+load("ReproductionRecruitment_Simulated_Data")
 
 
 
@@ -55,45 +51,6 @@ load("Repro_Rec_Simulated_Data.RData")
 # 2. Formatting dataset ----
 #
 ###########################################################################
-
-# Subset female data only and remove nomadic females
-females.data = lions.data[which(lions.data$stage == "AF"), ]
-females.data = females.data[- which(females.data$pride == "NO"), ]
-
-
-# Format age and habitat
-lions.data$age.at.capture = lions.data$age.at.capture / 12 # Age in years
-lions.data$habitat.code = lions.data$habitat.code + 1 # Habitat as c(1, 2) instead of c(0, 1)
-
-# Get probability of being in the woodland for missing covariate values
-habitat = females.data$habitat.code - 1
-summary(glm(c(habitat) ~ 1, "binomial"))
-habitat.intercept.estimate = coef(glm(c(habitat) ~ 1, "binomial"))
-barplot(table(habitat)/sum(table(habitat)), ylim = c(0, 1))
-points(dbinom(0:1, size = 1, prob = plogis(habitat.intercept.estimate)))
-habitat.prob = as.numeric(plogis(habitat.intercept.estimate))
-
-
-# New season number column
-females.data$season.nb = NA
-females.data$season.nb[which(females.data$season == "wet")] = 1
-females.data$season.nb[which(females.data$season == "dry")] = 2
-
-
-# New year number column
-year.number = data.frame(cbind(unique(females.data$year), # Assigning a number to each year of the dataset
-                               seq(1:length(unique(females.data$year))))) 
-colnames(year.number) = c("year","year.nb")
-
-
-females.data$year.nb = NA
-
-for(row in 1:nrow(females.data)){ # Add number corresponding to each year in the data
-  
-  females.data$year.nb[row] = year.number$year.nb[which(year.number$year == females.data$year[row])]
-  
-}
-
 
 # Standardize covariates
 

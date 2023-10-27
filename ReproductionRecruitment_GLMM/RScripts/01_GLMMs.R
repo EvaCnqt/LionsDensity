@@ -39,11 +39,7 @@ nimbleOptions(disallow_multivariate_argument_expressions = F)
 # ------------------
 
 # Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
-
-# Subset female data
-females.data = lions.data[which(lions.data$stage == "AF"), ]
-females.data = females.data[- which(females.data$pride == "NO"), ] # Remove nomadic females
+females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 
 
@@ -53,32 +49,6 @@ females.data = females.data[- which(females.data$pride == "NO"), ] # Remove noma
 # 2. Format data ----
 #
 ###########################################################################
-
-# Formatting age and habitat 
-females.data$age.at.capture = females.data$age.at.capture / 12 # Age in years
-females.data$habitat.code   = females.data$habitat.code + 1    # Habitat as c(1, 2)
-
-
-# Add season as a number
-females.data$season.nb = NA
-females.data$season.nb[which(females.data$season == "wet")] = 1
-females.data$season.nb[which(females.data$season == "dry")] = 2
-
-
-# Add year as a number
-year.number = data.frame(cbind(unique(females.data$year), # Assigning a number to each year of the dataset
-                               seq(1:length(unique(females.data$year))))) 
-colnames(year.number) = c("year","year.nb")
-
-# Add year number to the data
-females.data$year.nb = NA
-
-for(row in 1:nrow(females.data)){
-  
-  females.data$year.nb[row] = year.number$year.nb[which(year.number$year == females.data$year[row])]
-  
-}
-
 
 # Standardize covariates
 females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(females.data$age.at.capture, na.rm = T)) /

@@ -31,12 +31,19 @@ library(Cairo)
 # ------------------
 
 # Lion demographic dataset
-lions.data = read.csv("Data/01_LionsDemographicData.csv")
+females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 # MCMC samples
-load("LionFullModel_Repro_Rec_Output.RData")
 
-# Full output as a matrix
+# This allows you to open the samples provided with the code.
+lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
+
+# If you have run your own model using the two previous scripts, you can process the MCMC output with the commented code hereafter:
+
+# Loading output file
+load("Output/FullModel_Repro_Rec.RData")
+
+# Put results into a matrix
 lions_output_fullGLMM = as.matrix(rbind(lions_results_fullGLMM[[1]],
                                         lions_results_fullGLMM[[2]],
                                         lions_results_fullGLMM[[3]],
@@ -50,37 +57,6 @@ lions_output_fullGLMM = as.matrix(rbind(lions_results_fullGLMM[[1]],
 # 2. Formatting dataset ----
 #
 ###########################################################################
-
-# Format age and habitat
-lions.data$age.at.capture = lions.data$age.at.capture / 12 # Age in years
-lions.data$habitat.code = lions.data$habitat.code + 1 # Habitat as c(1, 2) instead of c(0, 1)
-
-
-# Subset female data only and remove nomadic females
-females.data = lions.data[which(lions.data$stage == "AF"), ]
-females.data = females.data[- which(females.data$pride == "NO"), ]
-
-
-# New season number column
-females.data$season.nb = NA
-females.data$season.nb[which(females.data$season == "wet")] = 1
-females.data$season.nb[which(females.data$season == "dry")] = 2
-
-
-# New year number column
-year.number = data.frame(cbind(unique(females.data$year), # Assigning a number to each year of the dataset
-                               seq(1:length(unique(females.data$year))))) 
-colnames(year.number) = c("year", "year.nb")
-
-
-females.data$year.nb = NA
-
-for(row in 1:nrow(females.data)){ # Add number corresponding to each year in the data
-  
-  females.data$year.nb[row] = year.number$year.nb[which(year.number$year == females.data$year[row])]
-  
-}
-
 
 # Standardize covariates
 
