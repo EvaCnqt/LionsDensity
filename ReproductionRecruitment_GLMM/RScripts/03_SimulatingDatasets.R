@@ -28,27 +28,64 @@ rm(list = ls(all.names = T))
 females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 # MCMC samples
-lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
+load("Output/Lions_Reproduction_Recruitment_MCMCSamples.RData")
+
+
+# Density dependent covariates for covariate standardization
+
+# Number of females in a pride
+nb.af.pride.unscaled = read.csv("Data/023_Covariate_NbAFpride.csv", 
+                                stringsAsFactors = F, row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+range(nb.af.pride.unscaled, na.rm = T)
+
+min.nb.af.pride = min(nb.af.pride.unscaled, na.rm = T)
+max.nb.af.pride = max(nb.af.pride.unscaled, na.rm = T)
+mu.nb.af.pride = mean(nb.af.pride.unscaled, na.rm = T)
+sd.nb.af.pride = sd(nb.af.pride.unscaled, na.rm = T)
+
+# Age
+age.unscaled = read.csv("Data/024_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+range(age.unscaled, na.rm = T)
+mu.age = mean(age.unscaled, na.rm = T)
+sd.age = sd(age.unscaled, na.rm = T)
+
+# Number of nomadic coalitions in the home range of a pride or 
+# a resident male coalition
+nb.nm.coal.hr.unscaled = read.csv("Data/025_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+range(nb.nm.coal.hr.unscaled, na.rm = T)
+min.nb.nm.coal.hr = min(nb.nm.coal.hr.unscaled, na.rm = T)
+max.nb.nm.coal.hr = max(nb.nm.coal.hr.unscaled, na.rm = T)
+mu.nb.nm.coal.hr = mean(nb.nm.coal.hr.unscaled, na.rm = T)
+sd.nb.nm.coal.hr = sd(nb.nm.coal.hr.unscaled, na.rm = T)
 
 
 
 
 ###########################################################################
 #
-# 2. Formatting dataset ----
+# 2. Format data ----
 #
 ###########################################################################
 
 # Standardize covariates
+females.data$age.at.capture.scaled = (females.data$age.at.capture - mu.age) /
+  (2 * sd.age)
+females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mu.nb.af.pride) / 
+  (2 * sd.nb.af.pride)
+females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mu.nb.nm.coal.hr) / 
+  (2 * sd.nb.nm.coal.hr)
 
-females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(females.data$age.at.capture, na.rm = T)) / 
-                                     (2 * sd(females.data$age.at.capture, na.rm = T))
-females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mean(females.data$nb_af_pride, na.rm = T)) /
-                                     (2 * sd(females.data$nb_af_pride, na.rm = T))
-females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(females.data$nb_nm_coal_hr, na.rm = T)) / 
-                                    (2 * sd(females.data$nb_nm_coal_hr, na.rm = T))
 
-
+# Get habitat proportion
+habitat = females.data$habitat.code - 1
+summary(glm(c(habitat) ~ 1, "binomial"))
+habitat.intercept.estimate = coef(glm(c(habitat) ~ 1, "binomial"))
+barplot(table(habitat)/sum(table(habitat)), ylim = c(0, 1))
+points(dbinom(0:1, size = 1, prob = boot::inv.logit(habitat.intercept.estimate)))
+habitat.prob = as.numeric(boot::inv.logit(habitat.intercept.estimate))
 
 
 
@@ -64,7 +101,7 @@ females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(females.d
 # --------------------------------------
 
 # 500 samples from the posterior distribution for each parameter
-posterior_sampled = lions_output_fullGLMM[seq(1, nrow(lions_output_fullGLMM), 
+posterior_sampled = lions_output_repro_recruit[seq(1, nrow(lions_output_repro_recruit), 
                                               length.out = 500), ]
 
 
@@ -164,8 +201,8 @@ repro_rec_function = function(data = females.data, # Observed data
 
 
 # Empty list to store the simulated datasets
-list_simulated_data = vector(mode = "list", 
-                             length = 10 * nrow(posterior_sampled))
+lions_repro_recruit_simulated_data = vector(mode = "list", 
+                                            length = 10 * nrow(posterior_sampled))
 
 k = 1 # Initialize counter to store data in the list
 
@@ -255,7 +292,7 @@ for(post in 1:nrow(posterior_sampled)){
                                         habitat.prob = habitat.prob, # Habitat probability for missing habitat values
                                         age_vector = females.data$age.at.capture.scaled) # Age
     
-    list_simulated_data_seasonal_coeffs[[k]] = simulated_data # Add simulated data to the list
+    lions_repro_recruit_simulated_data[[k]] = simulated_data # Add simulated data to the list
     
     k = k + 1
     
@@ -264,4 +301,4 @@ for(post in 1:nrow(posterior_sampled)){
 
 
 # Save simulated data list
-save(list_simulated_data, file = "Repro_Rec_Simulated_Data.RData")
+save(lions_repro_recruit_simulated_data, file = "Output/Lions_Reproduction_Recruitment_Simulated_Data.RData")

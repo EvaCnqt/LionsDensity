@@ -38,28 +38,67 @@ library(viridis)
 females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 # MCMC samples
-lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
+load("Output/Lions_Reproduction_Recruitment_MCMCSamples.RData")
 
 # Simulated datasets
-load("ReproductionRecruitment_Simulated_Data")
+load("Output/Lions_Reproduction_Recruitment_Simulated_Data.RData")
+
+
+# Density dependent covariates for covariate standardization
+
+# Number of females in a pride
+nb.af.pride.unscaled = read.csv("Data/023_Covariate_NbAFpride.csv", 
+                                stringsAsFactors = F, row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+range(nb.af.pride.unscaled, na.rm = T)
+
+min.nb.af.pride = min(nb.af.pride.unscaled, na.rm = T)
+max.nb.af.pride = max(nb.af.pride.unscaled, na.rm = T)
+mu.nb.af.pride = mean(nb.af.pride.unscaled, na.rm = T)
+sd.nb.af.pride = sd(nb.af.pride.unscaled, na.rm = T)
+
+# Age
+age.unscaled = read.csv("Data/024_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+range(age.unscaled, na.rm = T)
+mu.age = mean(age.unscaled, na.rm = T)
+sd.age = sd(age.unscaled, na.rm = T)
+
+# Number of nomadic coalitions in the home range of a pride or 
+# a resident male coalition
+nb.nm.coal.hr.unscaled = read.csv("Data/025_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+range(nb.nm.coal.hr.unscaled, na.rm = T)
+min.nb.nm.coal.hr = min(nb.nm.coal.hr.unscaled, na.rm = T)
+max.nb.nm.coal.hr = max(nb.nm.coal.hr.unscaled, na.rm = T)
+mu.nb.nm.coal.hr = mean(nb.nm.coal.hr.unscaled, na.rm = T)
+sd.nb.nm.coal.hr = sd(nb.nm.coal.hr.unscaled, na.rm = T)
 
 
 
 
 ###########################################################################
 #
-# 2. Formatting dataset ----
+# 2. Format data ----
 #
 ###########################################################################
 
 # Standardize covariates
+females.data$age.at.capture.scaled = (females.data$age.at.capture - mu.age) /
+  (2 * sd.age)
+females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mu.nb.af.pride) / 
+  (2 * sd.nb.af.pride)
+females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mu.nb.nm.coal.hr) / 
+  (2 * sd.nb.nm.coal.hr)
 
-females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(females.data$age.at.capture, na.rm = T)) / 
-                                     (2 * sd(females.data$age.at.capture, na.rm = T))
-females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mean(females.data$nb_af_pride, na.rm = T)) / 
-                                  (2 * sd(females.data$nb_af_pride, na.rm = T))
-females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(females.data$nb_nm_coal_hr, na.rm = T)) / 
-                                    (2 * sd(females.data$nb_nm_coal_hr, na.rm = T))
+
+# Get habitat proportion
+habitat = females.data$habitat.code - 1
+summary(glm(c(habitat) ~ 1, "binomial"))
+habitat.intercept.estimate = coef(glm(c(habitat) ~ 1, "binomial"))
+barplot(table(habitat)/sum(table(habitat)), ylim = c(0, 1))
+points(dbinom(0:1, size = 1, prob = boot::inv.logit(habitat.intercept.estimate)))
+habitat.prob = as.numeric(boot::inv.logit(habitat.intercept.estimate))
 
 
 
@@ -137,10 +176,10 @@ mean_nb_cubs_true = mean.nb.cubs(females.data)
 
 repro_prob_simulated = c()
 
-for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
+for(nsim in 1:length(lions_repro_recruit_simulated_data)){
   
   repro_prob_simulated = c(repro_prob_simulated, 
-                           repro.prob(list_simulated_data_seasonal_coeffs[[nsim]]))
+                           repro.prob(lions_repro_recruit_simulated_data[[nsim]]))
   
 } 
 
@@ -150,10 +189,10 @@ for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
 
 age_repro_females_simulated = c()
 
-for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
+for(nsim in 1:length(lions_repro_recruit_simulated_data)){
   
   age_repro_females_simulated = c(age_repro_females_simulated, 
-                                  age.repro.females(list_simulated_data_seasonal_coeffs[[nsim]]))
+                                  age.repro.females(lions_repro_recruit_simulated_data[[nsim]]))
   
 } 
 
@@ -163,10 +202,10 @@ for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
 
 mean_nb_cubs_simulated = c()
 
-for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
+for(nsim in 1:length(lions_repro_recruit_simulated_data)){
   
   mean_nb_cubs_simulated = c(mean_nb_cubs_simulated, 
-                             mean.nb.cubs(list_simulated_data_seasonal_coeffs[[nsim]]))
+                             mean.nb.cubs(lions_repro_recruit_simulated_data[[nsim]]))
   
 }
 
@@ -186,21 +225,21 @@ for(nsim in 1:length(list_simulated_data_seasonal_coeffs)){
 # -------------------------------------------
 
 repro_prob_pvalue = length(which(repro_prob_simulated > repro_prob_true)) / 
-                    length(list_simulated_data_seasonal_coeffs)
+                    length(lions_repro_recruit_simulated_data)
 
 
 ## 5.1.2. Average age of reproducing females  ----
 # ------------------------------------------
 
 age_repro_females_pvalue = length(which(age_repro_females_simulated > age_repro_females_true)) /
-                           length(list_simulated_data_seasonal_coeffs)
+                           length(lions_repro_recruit_simulated_data)
 
 
 ## 5.1.3. Mean number of cubs  ----
 # ---------------------------
 
 mean_nb_cubs_pvalue = length(which(mean_nb_cubs_simulated > mean_nb_cubs_true)) / 
-                      length(list_simulated_data_seasonal_coeffs)
+                      length(lions_repro_recruit_simulated_data)
 
 
 
@@ -222,7 +261,7 @@ colBG = "transparent"
 # Define color, font, font size of plot
 colPlot = "black"
 font = "Helvetica"
-fontSize = 10
+fontSize = 7
 
 
 # We first merge all the simulated and observed values in the same
@@ -236,7 +275,7 @@ plot_title = "True vs. simulated value: Proportion of females reproducing"
 sim_distribution = repro_prob_simulated
 true_value = repro_prob_true
 
-prior_post = data.frame(metric = "Proportion of\nfemales reproducing",
+sim_obs_df = data.frame(metric = "Proportion of\nfemales reproducing",
                         sim_distribution = sim_distribution,
                         true_value = true_value)
 
@@ -248,7 +287,7 @@ plot_title = "True vs. simulated value: Mean age of reproducing females (in mont
 sim_distribution = age_repro_females_simulated
 true_value = age_repro_females_true
 
-prior_post = rbind(prior_post, 
+sim_obs_df = rbind(sim_obs_df, 
                    data.frame(metric = "Mean age of\nreproducing females\n(in months)",
                               sim_distribution = sim_distribution,
                               true_value = true_value))
@@ -261,7 +300,7 @@ plot_title = "True vs. simulated value: Mean number of cubs per female"
 sim_distribution = mean_nb_cubs_simulated
 true_value = mean_nb_cubs_true
 
-prior_post = rbind(prior_post,
+sim_obs_df = rbind(sim_obs_df,
                    data.frame(metric = "Mean number of\ncubs per female",
                               sim_distribution = sim_distribution,
                               true_value = true_value))
@@ -292,7 +331,7 @@ sim_obs_df = rbind(sim_obs_df,
 sim_obs_df$metric = factor(sim_obs_df$metric, unique(sim_obs_df$metric))
 
 
-png(filename = "PPC_Plots.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_PPC_Plots.png", 
     width = 15, 
     height = 12, 
     units = "cm", 
@@ -360,7 +399,9 @@ pval_df = rbind(pval_df,
 ## 6.3. Plot p-values ----
 # -------------------
 
-png(filename = "ReproRec_PPC_Pvalues.png",
+fontSize = 8
+
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_PPC_Pvalues.png",
     width = 8,
     height = 8,
     units = "cm",
@@ -412,48 +453,48 @@ dev.off()
 predict_repro_rec = function(output, # Vital rate to predict (repro or rec)
                              
                              # Intercepts of vital-rate models
-                             mu.repro = lions_output_fullGLMM[, grep("mu.repro", # Reproduction probability
-                                                                     colnames(lions_output_fullGLMM))],
-                             mu.rec = lions_output_fullGLMM[, grep("mu.rec",     # Recruitment
-                                                                   colnames(lions_output_fullGLMM))],
+                             mu.repro = lions_output_repro_recruit[, grep("mu.repro", # Reproduction probability
+                                                                     colnames(lions_output_repro_recruit))],
+                             mu.rec = lions_output_repro_recruit[, grep("mu.rec",     # Recruitment
+                                                                   colnames(lions_output_repro_recruit))],
                              
                              # Betas of vital-rate models
                              # Reproduction probability
-                             repro.beta.habitat.woodland = lions_output_fullGLMM[, grep("repro.beta.habitat.woodland",                   # Habitat
-                                                                                        colnames(lions_output_fullGLMM))],
-                             repro.beta.age = lions_output_fullGLMM[, grep("repro.beta.age",                                             # Age
-                                                                           colnames(lions_output_fullGLMM))],
-                             repro.beta.quad.age = lions_output_fullGLMM[, grep("repro.beta.quad.age",                                   # Quadratic age
-                                                                                colnames(lions_output_fullGLMM))],
-                             repro.beta.nb.af.pride = lions_output_fullGLMM[, grep("repro.beta.nb.af.pride",                             # Number of adult females in the pride
-                                                                                   colnames(lions_output_fullGLMM))][, c(1, 2)],
-                             repro.beta.quad.nb.af.pride = lions_output_fullGLMM[, grep("repro.beta.quad.nb.af.pride",                   # Quadratic number of adult females in the pride
-                                                                                        colnames(lions_output_fullGLMM))],
-                             repro.beta.nb.nm.coal.hr = lions_output_fullGLMM[, grep("repro.beta.nb.nm.coal.hr",                         # Number of nomadic coalitions in the home range
-                                                                                     colnames(lions_output_fullGLMM))], 
-                             repro.beta.nb.af.pride.nb.nm.coal.hr = lions_output_fullGLMM[, grep("repro.beta.nb.af.pride.nb.nm.coal.hr", # Interaction between the number of
+                             repro.beta.habitat.woodland = lions_output_repro_recruit[, grep("repro.beta.habitat.woodland",                   # Habitat
+                                                                                        colnames(lions_output_repro_recruit))],
+                             repro.beta.age = lions_output_repro_recruit[, grep("repro.beta.age",                                             # Age
+                                                                           colnames(lions_output_repro_recruit))],
+                             repro.beta.quad.age = lions_output_repro_recruit[, grep("repro.beta.quad.age",                                   # Quadratic age
+                                                                                colnames(lions_output_repro_recruit))],
+                             repro.beta.nb.af.pride = lions_output_repro_recruit[, grep("repro.beta.nb.af.pride",                             # Number of adult females in the pride
+                                                                                   colnames(lions_output_repro_recruit))][, c(1, 2)],
+                             repro.beta.quad.nb.af.pride = lions_output_repro_recruit[, grep("repro.beta.quad.nb.af.pride",                   # Quadratic number of adult females in the pride
+                                                                                        colnames(lions_output_repro_recruit))],
+                             repro.beta.nb.nm.coal.hr = lions_output_repro_recruit[, grep("repro.beta.nb.nm.coal.hr",                         # Number of nomadic coalitions in the home range
+                                                                                     colnames(lions_output_repro_recruit))], 
+                             repro.beta.nb.af.pride.nb.nm.coal.hr = lions_output_repro_recruit[, grep("repro.beta.nb.af.pride.nb.nm.coal.hr", # Interaction between the number of
                                                                                                                                          # adult females in the pride and the
                                                                                                                                          # number of nomadic coalitions in 
                                                                                                                                          # the home range 
-                                                                                                 colnames(lions_output_fullGLMM))],
+                                                                                                 colnames(lions_output_repro_recruit))],
                              # Recruitment
-                             rec.beta.habitat.woodland = lions_output_fullGLMM[, grep("rec.beta.habitat.woodland",                       # Habitat
-                                                                                      colnames(lions_output_fullGLMM))],
-                             rec.beta.nb.af.pride = lions_output_fullGLMM[, grep("rec.beta.nb.af.pride",                                 # Number of adult females in the pride
-                                                                                 colnames(lions_output_fullGLMM))][, c(1, 2)],
-                             rec.beta.nb.nm.coal.hr = lions_output_fullGLMM[, grep("rec.beta.nb.nm.coal.hr",                             # Number of nomadic coalitions in the home range
-                                                                                   colnames(lions_output_fullGLMM))],
-                             rec.beta.nb.af.pride.nb.nm.coal.hr = lions_output_fullGLMM[, grep("rec.beta.nb.af.pride.nb.nm.coal.hr",     # Interaction between the number of
+                             rec.beta.habitat.woodland = lions_output_repro_recruit[, grep("rec.beta.habitat.woodland",                       # Habitat
+                                                                                      colnames(lions_output_repro_recruit))],
+                             rec.beta.nb.af.pride = lions_output_repro_recruit[, grep("rec.beta.nb.af.pride",                                 # Number of adult females in the pride
+                                                                                 colnames(lions_output_repro_recruit))][, c(1, 2)],
+                             rec.beta.nb.nm.coal.hr = lions_output_repro_recruit[, grep("rec.beta.nb.nm.coal.hr",                             # Number of nomadic coalitions in the home range
+                                                                                   colnames(lions_output_repro_recruit))],
+                             rec.beta.nb.af.pride.nb.nm.coal.hr = lions_output_repro_recruit[, grep("rec.beta.nb.af.pride.nb.nm.coal.hr",     # Interaction between the number of
                                                                                                                                          # adult females in the pride and the
                                                                                                                                          # number of nomadic coalitions in 
                                                                                                                                          # the home range 
-                                                                                               colnames(lions_output_fullGLMM))],
+                                                                                               colnames(lions_output_repro_recruit))],
                              
                              # Random effect epsilons
-                             epsilon.repro = lions_output_fullGLMM[, grep("epsilon.repro", # Reproduction probability
-                                                                          colnames(lions_output_fullGLMM))],
-                             epsilon.rec = lions_output_fullGLMM[, grep("epsilon.rec",     # Recruitment
-                                                                        colnames(lions_output_fullGLMM))],
+                             epsilon.repro = lions_output_repro_recruit[, grep("epsilon.repro", # Reproduction probability
+                                                                          colnames(lions_output_repro_recruit))],
+                             epsilon.rec = lions_output_repro_recruit[, grep("epsilon.rec",     # Recruitment
+                                                                        colnames(lions_output_repro_recruit))],
                              
                              # Covariates
                              season,        # Season at a given timestep
@@ -563,7 +604,7 @@ for(i in 1:nrow(repro_pred)){
 repro_pred
 
 # Save predictions
-save(repro_pred, file = "Repro_Pred.RData")
+save(repro_pred, file = "Output/Lions_Reproduction_PredictedValues.RData")
 
 
 ## 7.3. Recruitment ----
@@ -618,11 +659,17 @@ for(i in 1:nrow(rec_pred)){
 rec_pred
 
 # Save predictions
-save(rec_pred, file = "Rec_Pred.RData")
+save(rec_pred, file = "Output/Lions_Recruitment_PredictedValues.RData")
 
 
 ## 7.4. Plot observed vs predicted values ----
 # ---------------------------------------
+
+# To avoid rerunning the prediction code, you can directly load the
+# output here
+load("Output/Lions_Reproduction_PredictedValues.RData")
+load("Output/Lions_Recruitment_PredictedValues.RData")
+
 
 # Add index to data for plotting
 repro_pred$timestep = paste(repro_pred$year, repro_pred$season, sep = "_")
@@ -638,7 +685,7 @@ cbbPalette = c("#000000", "#E69F00", "#56B4E9", "#009E73",
 
 
 # Plot observed vs predicted reproduction probabilities
-png(file = "ObsVSPred_Repro.png",
+png(file = "Output/Plots/Lions_Reproduction_ObsVSPred.png",
     type = "cairo",
     units = "cm",
     width = 15,
@@ -676,7 +723,7 @@ dev.off()
 
 
 # Plot observed vs predicted recruitment
-png(file = "ObsVSPred_Rec.png",
+png(file = "Output/Plots/Lions_Recruitment_ObsVSPred.png",
     type = "cairo",
     units = "cm",
     width = 15,

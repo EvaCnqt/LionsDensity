@@ -50,13 +50,21 @@ females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 #
 ###########################################################################
 
-# Standardize covariates
-females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(females.data$age.at.capture, na.rm = T)) /
-                                     (2 * sd(females.data$age.at.capture, na.rm = T))
-females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mean(females.data$nb_af_pride, na.rm = T)) / 
-                                  (2 * sd(females.data$nb_af_pride, na.rm = T))
-females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(females.data$nb_nm_coal_hr, na.rm = T)) / 
-                                    (2 * sd(females.data$nb_nm_coal_hr, na.rm = T))
+# Density-dependent covariates for covariate standardization
+nb.af.pride.unscaled = read.csv("Data/023_Covariate_NbAFpride.csv", stringsAsFactors = F, row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+
+age.unscaled = read.csv("Data/024_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+
+nb.nm.coal.hr.unscaled = read.csv("Data/025_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+
+
+# Covariate standardization
+females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(age.unscaled, na.rm = T)) / (2 * sd(age.unscaled, na.rm = T))
+females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T))
 
 
 # Get habitat distribution
@@ -80,7 +88,7 @@ points(dbinom(0:1, size = 1, prob = inv.logit(habitat.intercept.estimate))) # Pr
 
 # Model code 
 
-lions_code_recruit_repro = nimbleCode({
+lions_code_repro_recruit = nimbleCode({
   # -------------------------------------------------
   #
   # Parameters:
@@ -133,7 +141,7 @@ lions_code_recruit_repro = nimbleCode({
     
     # Means
     
-    mu.repro[seas] ~ dunif(-10, 10)                             # Reproduction probability           
+    mu.repro[seas] ~ dunif(-20, 20)                             # Reproduction probability           
     mu.rec[seas] ~ dunif(-10, 2)                                # Recruitment
     
     
@@ -142,14 +150,14 @@ lions_code_recruit_repro = nimbleCode({
     # Reproduction probability
     
     repro.beta.habitat.woodland[seas, 1] <- 0                   # Habitat - grassland (reference level)
-    repro.beta.habitat.woodland[seas, 2] ~ dunif(-10, 10)       # Habitat - woodland
+    repro.beta.habitat.woodland[seas, 2] ~ dunif(-20, 20)       # Habitat - woodland
     
-    repro.beta.age[seas] ~ dunif(-10, 10)                       # Age
-    repro.beta.quad.age[seas] ~ dunif(-10, 10)                  # Quadratic age
-    repro.beta.nb.af.pride[seas] ~ dunif(-10, 10)               # Number of adult females in the pride
-    repro.beta.quad.nb.af.pride[seas] ~ dunif(-10, 10)          # Quadratic number of adult females in the pride
-    repro.beta.nb.nm.coal.hr[seas] ~ dunif(-10, 10)             # Number of nomadic coalitions in the home range
-    repro.beta.nb.af.pride.nb.nm.coal.hr[seas] ~ dunif(-10, 10) # Interaction between the number of
+    repro.beta.age[seas] ~ dunif(-20, 20)                       # Age
+    repro.beta.quad.age[seas] ~ dunif(-20, 20)                  # Quadratic age
+    repro.beta.nb.af.pride[seas] ~ dunif(-20, 20)               # Number of adult females in the pride
+    repro.beta.quad.nb.af.pride[seas] ~ dunif(-20, 20)          # Quadratic number of adult females in the pride
+    repro.beta.nb.nm.coal.hr[seas] ~ dunif(-20, 20)             # Number of nomadic coalitions in the home range
+    repro.beta.nb.af.pride.nb.nm.coal.hr[seas] ~ dunif(-20, 20) # Interaction between the number of
                                                                 # adult females in the pride and the
                                                                 # number of nomadic coalitions in 
                                                                 # the home range
@@ -197,21 +205,21 @@ lions_code_recruit_repro = nimbleCode({
 
 # Model constants
 
-lions_constants_GLMM <- list(R = nrow(females.data), # Number of rows in the data
-                             season = females.data$season.nb, # Season
-                             year = females.data$year.nb,     # Year
-                             age = females.data$age.at.capture.scaled, # Age
-                             nb.af.pride = females.data$nb.af.pride.scaled,     # Number of adult females in the pride
-                             nb.nm.coal.hr = females.data$nb.nm.coal.hr.scaled, # Number of nomadic coalitions in the home range 
-                             habitat.prob = inv.logit(habitat.intercept.estimate)) # Observed probability of being in the woodland habitat
+lions_constants_repro_recruit <- list(R = nrow(females.data), # Number of rows in the data
+                                      season = females.data$season.nb, # Season
+                                      year = females.data$year.nb,     # Year
+                                      age = females.data$age.at.capture.scaled, # Age
+                                      nb.af.pride = females.data$nb.af.pride.scaled,     # Number of adult females in the pride
+                                      nb.nm.coal.hr = females.data$nb.nm.coal.hr.scaled, # Number of nomadic coalitions in the home range 
+                                      habitat.prob = inv.logit(habitat.intercept.estimate)) # Observed probability of being in the woodland habitat
 
 
 # Model data
 
-lions_data_fullGLMM <- list(reproduction = females.data$reproduction,     # Reproduction 
-                            cubs = females.data$cubs,                     # Recruitment
-                            habitat = females.data$habitat.code,          # Habitat as a (1, 2) variable for the model
-                            temp.habitat = females.data$habitat.code - 1) # Habitat as a (0, 1) variable for the sampling of missing covariate values
+lions_data_repro_recruit <- list(reproduction = females.data$reproduction,     # Reproduction
+                                 cubs = females.data$cubs,                     # Recruitment
+                                 habitat = females.data$habitat.code,          # Habitat as a (1, 2) variable for the model
+                                 temp.habitat = females.data$habitat.code - 1) # Habitat as a (0, 1) variable for the sampling of missing covariate values
 
 
 # Model initial values
@@ -236,7 +244,7 @@ inits.habitat = function(cov){ # cov is the observed data
 # Setting initial values for the model parameters and creating the list
 # of initial values
 
-lions_inits_fullGLMM <- function() {
+lions_inits_repro_recruit <- function() {
   list(# Intercepts
        mu.repro = runif(2, -2, 2), # Reproduction probability
        mu.rec = runif(2, -1, 1),   # Recruitment
@@ -288,10 +296,10 @@ lions_inits_fullGLMM <- function() {
 
 
 # Sample initial values
-init.val = list(lions_inits_fullGLMM(), # Chain 1
-                lions_inits_fullGLMM(), # Chain 2
-                lions_inits_fullGLMM(), # Chain 3
-                lions_inits_fullGLMM()) # Chain 4
+init.val = list(lions_inits_repro_recruit(), # Chain 1
+                lions_inits_repro_recruit(), # Chain 2
+                lions_inits_repro_recruit(), # Chain 3
+                lions_inits_repro_recruit()) # Chain 4
 
 
 # Parameters monitored
@@ -333,16 +341,16 @@ parameters = c(# Intercepts
 ## 3.2. Fitting the model ----
 # -----------------------
 
-lions_results_fullGLMM = 
-  nimbleMCMC(code = lions_code_recruit_repro,
-             constants = lions_constants_GLMM,
-             data = lions_data_fullGLMM,
-             inits = lions_inits_fullGLMM,
+lions_output_repro_recruit = 
+  nimbleMCMC(code = lions_code_repro_recruit,
+             constants = lions_constants_repro_recruit,
+             data = lions_data_repro_recruit,
+             inits = lions_inits_repro_recruit,
              monitors = parameters,
-             niter = 55000, 
+             niter = 60000, 
              nburnin = 10000,
              nchains = 4,
              thin = 1,
              samplesAsCodaMCMC = TRUE)
 
-save(lions_results_fullGLMM, file = "FullModel_Repro_Rec.RData")
+save(lions_output_repro_recruit, file = "Output/Lions_Reproduction_Recruitment_MCMCOutput.RData")

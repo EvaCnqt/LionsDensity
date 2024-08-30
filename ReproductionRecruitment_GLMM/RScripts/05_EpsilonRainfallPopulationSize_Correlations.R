@@ -34,7 +34,7 @@ library(bayestestR)
 # ------------------
 
 # MCMC samples
-lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
+load("Output/Lions_Reproduction_Recruitment_MCMCSamples.RData")
 
 
 
@@ -46,8 +46,8 @@ lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv
 ###########################################################################
 
 # Covariates
-pop.size = read.csv("Data/02_Covariate_PopulationSize.csv")$x
-rainfall = read.csv("Data/03_Covariate_SeasonalPrecipitation.csv")
+pop.size = read.csv("Data/021_Covariate_PopulationSize.csv")$x
+rainfall = read.csv("Data/022_Covariate_SeasonalPrecipitation.csv")
 rainfall = rainfall$cumul.rain
 
 
@@ -67,7 +67,7 @@ cbbPalette = c("#000000", "#E69F00", "#56B4E9",
 colBG = "transparent" # Plot background color
 colPlot = "black"     # Plot color
 font = "Helvetica"    # Plot font
-fontSize = 10         # Plot font size
+fontSize = 7         # Plot font size
 
 # Define ggplot theme:
 theme_general = function(){ 
@@ -109,8 +109,8 @@ theme_general = function(){
 ## 4.1. Subset epsilons ----
 # ---------------------
 
-epsilons = lions_output_fullGLMM[, grep("epsilon", 
-                                        colnames(lions_output_fullGLMM))]
+epsilons = lions_output_repro_recruit[, grep("epsilon", 
+                                        colnames(lions_output_repro_recruit))]
 
 epsilons.repro = epsilons[, grep("epsilon.repro", colnames(epsilons))]
 epsilons.rec = epsilons[, grep("epsilon.rec", colnames(epsilons))]
@@ -119,7 +119,7 @@ epsilons.rec = epsilons[, grep("epsilon.rec", colnames(epsilons))]
 ## 4.2. Reproduction probability  ----
 # ------------------------------
 
-corr.epsilon.rainfall.pop.size = data.frame(param = "Reproduction probability",
+corr.epsilon.rainfall.pop.size = data.frame(param = "Reproduction\nprobability",
                                             covar = "Rainfall",
                                             corr = apply(epsilons.repro, 1, 
                                                          FUN = function(x) cor(x, rainfall)))
@@ -148,7 +148,7 @@ corr.epsilon.rainfall.pop.size = rbind(corr.epsilon.rainfall.pop.size,
 # ------------------------------
 
 corr.epsilon.rainfall.pop.size = rbind(corr.epsilon.rainfall.pop.size,
-                                       data.frame(param = "Reproduction probability",
+                                       data.frame(param = "Reproduction\nprobability",
                                                   covar = "Population size",
                                                   corr = apply(epsilons.repro, 1, 
                                                                FUN = function(x) cor(x, pop.size))))
@@ -174,16 +174,16 @@ corr.epsilon.rainfall.pop.size = rbind(corr.epsilon.rainfall.pop.size,
 
 # Factorize parameter names
 corr.epsilon.rainfall.pop.size$param = factor(corr.epsilon.rainfall.pop.size$param, 
-                                              levels = c("Reproduction probability",
+                                              levels = c("Reproduction\nprobability",
                                                          "Recruitment to\n1 year old"))
 
 
 # Plot
-png(file = "EpsilonPopSizeCorr.png",
+png(file = "Output/Plots/Lions_Reproduction_Recruitment_CorrelationEpsilon_PopSizeRainfall.png",
     type = "cairo",
     units = "cm",
-    width = 8,
-    height = 8,
+    width = 6,
+    height = 6,
     res = 600,
     bg = "transparent")
 

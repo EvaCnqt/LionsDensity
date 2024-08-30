@@ -25,6 +25,8 @@ library(MCMCvis)
 library(coda)
 library(bayestestR)
 library(Cairo)
+library(boot)
+library(rcartocolor)
 
 
 ## 1.2. Loading data ----
@@ -35,37 +37,85 @@ females.data = read.csv("Data/01_LionsFemalesDemographicData.csv")
 
 # MCMC samples
 
-# This allows you to open the samples provided with the code.
-lions_output_fullGLMM = read.csv("Output/ReproductionRecruitmentGLMM_Samples.csv")
+# This allows you to open the samples provided with the code. 
+load("Output/Lions_Reproduction_Recruitment_MCMCSamples.RData")
 
-# If you have run your own model using the two previous scripts, you can process the MCMC output with the commented code hereafter:
+lions_output_repro_recruit_MCMClist = as.mcmc.list(list(as.mcmc(lions_output_repro_recruit[1:50000, ]),
+                                                        as.mcmc(lions_output_repro_recruit[50001:100000, ]),
+                                                        as.mcmc(lions_output_repro_recruit[100001:150000, ]),
+                                                        as.mcmc(lions_output_repro_recruit[150001:200000, ])))
 
-# Loading output file
-load("Output/FullModel_Repro_Rec.RData")
 
-# Put results into a matrix
-lions_output_fullGLMM = as.matrix(rbind(lions_results_fullGLMM[[1]],
-                                        lions_results_fullGLMM[[2]],
-                                        lions_results_fullGLMM[[3]],
-                                        lions_results_fullGLMM[[4]])) 
+# If you have run your own model using the two previous scripts, 
+# you can process the MCMC output with the commented code hereafter:
+
+# # Loading output file
+# load("Output/Lions_Reproduction_Recruitment_MCMCOutput.RData")
+# lions_output_repro_recruit_MCMClist = lions_output_repro_recruit
+# 
+# # Put results into a matrix
+# lions_output_repro_recruit = as.matrix(rbind(lions_output_repro_recruit[[1]],
+#                                              lions_output_repro_recruit[[2]],
+#                                              lions_output_repro_recruit[[3]],
+#                                              lions_output_repro_recruit[[4]]))
+# 
+# save(lions_output_repro_recruit, file = "Output/Lions_Reproduction_Recruitment_MCMCSamples.RData")
+
+
+# Density dependent covariates for covariate standardization
+
+# Number of females in a pride
+nb.af.pride.unscaled = read.csv("Data/023_Covariate_NbAFpride.csv", 
+                                stringsAsFactors = F, row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+range(nb.af.pride.unscaled, na.rm = T)
+
+min.nb.af.pride = min(nb.af.pride.unscaled, na.rm = T)
+max.nb.af.pride = max(nb.af.pride.unscaled, na.rm = T)
+mu.nb.af.pride = mean(nb.af.pride.unscaled, na.rm = T)
+sd.nb.af.pride = sd(nb.af.pride.unscaled, na.rm = T)
+
+# Age
+age.unscaled = read.csv("Data/024_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+range(age.unscaled, na.rm = T)
+mu.age = mean(age.unscaled, na.rm = T)
+sd.age = sd(age.unscaled, na.rm = T)
+
+# Number of nomadic coalitions in the home range of a pride or 
+# a resident male coalition
+nb.nm.coal.hr.unscaled = read.csv("Data/025_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+range(nb.nm.coal.hr.unscaled, na.rm = T)
+min.nb.nm.coal.hr = min(nb.nm.coal.hr.unscaled, na.rm = T)
+max.nb.nm.coal.hr = max(nb.nm.coal.hr.unscaled, na.rm = T)
+mu.nb.nm.coal.hr = mean(nb.nm.coal.hr.unscaled, na.rm = T)
+sd.nb.nm.coal.hr = sd(nb.nm.coal.hr.unscaled, na.rm = T)
 
 
 
 
 ###########################################################################
 #
-# 2. Formatting dataset ----
+# 2. Format data ----
 #
 ###########################################################################
 
 # Standardize covariates
+females.data$age.at.capture.scaled = (females.data$age.at.capture - mu.age) /
+  (2 * sd.age)
+females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mu.nb.af.pride) / 
+  (2 * sd.nb.af.pride)
+females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mu.nb.nm.coal.hr) / 
+  (2 * sd.nb.nm.coal.hr)
 
-females.data$age.at.capture.scaled = (females.data$age.at.capture - mean(females.data$age.at.capture, na.rm = T)) / 
-                                     (2 * sd(females.data$age.at.capture, na.rm = T))
-females.data$nb.af.pride.scaled = (females.data$nb_af_pride - mean(females.data$nb_af_pride, na.rm = T)) / 
-                                  (2 * sd(females.data$nb_af_pride, na.rm = T))
-females.data$nb.nm.coal.hr.scaled = (females.data$nb_nm_coal_hr - mean(females.data$nb_nm_coal_hr, na.rm = T)) / 
-                                    (2 * sd(females.data$nb_nm_coal_hr, na.rm = T))
+
+# Get habitat distribution
+summary(glm((females.data$habitat.code) - 1 ~ 1, "binomial"))
+habitat.intercept.estimate = coef(glm((females.data$habitat.code) - 1 ~ 1, "binomial"))
+barplot(table((females.data$habitat.code) - 1) / sum(table((females.data$habitat.code) - 1)), 
+        ylim = c(0, 1))
+points(dbinom(0:1, size = 1, prob = inv.logit(habitat.intercept.estimate))) # Probability of being in the woodland
 
 
 
@@ -118,17 +168,19 @@ params.to.plot = params.to.plot[- grep("epsilon", params.to.plot)]
 
 
 # Traceplots of all chains
-MCMCtrace(lions_results_fullGLMM, 
-          priors = runif(45000*4, -10, 10), # Priors to get the prior-posterior overlaps 
+MCMCtrace(lions_output_repro_recruit_MCMClist, 
+          priors = runif(50000*4, -20, 20), # Priors to get the prior-posterior overlaps 
           params = params.to.plot[grep("repro", params.to.plot)], # Parameters to plot
-          iter = 45000, # Plot all iterations 
-          filename = "Repro_MCMCtrace.pdf")
+          iter = 50000, # Plot all iterations 
+          open_pdf = F,
+          filename = "Output/Plots/Reproduction_MCMCtrace.pdf")
 
-MCMCtrace(lions_results_fullGLMM, 
-          priors = runif(45000*4, -5, 1), # Priors to get the prior-posterior overlaps 
+MCMCtrace(lions_output_repro_recruit_MCMClist, 
+          priors = runif(50000*4, -5, 1), # Priors to get the prior-posterior overlaps 
           params = params.to.plot[grep("rec", params.to.plot)], # Parameters to plot
-          iter = 45000, # Plot all iterations 
-          filename = "Rec_MCMCtrace.pdf")
+          iter = 50000, # Plot all iterations 
+          open_pdf = F,
+          filename = "Output/Plots/Recruitment_MCMCtrace.pdf")
 
 
 
@@ -164,7 +216,7 @@ theme_general = function(){
           panel.grid.minor = element_blank(),
           axis.line = element_line(colour = colPlot),
           axis.ticks = element_line(colour = colPlot),
-          plot.background = element_rect(fill = colBG, color = colBG, size = 0),
+          plot.background = element_rect(fill = colBG, color = colBG, linewidth = 0),
           plot.title = element_text(colour = colPlot, size = 10, family = font, 
                                     hjust = 0, 
                                     margin = margin(t = 0, r = 0, b = 15, l = 0)),
@@ -219,8 +271,18 @@ for(param in params.prior.post.overlap){
   if(strsplit(param, split = ".", fixed = T)[[1]][1] == "repro" | 
      strsplit(param, split = ".", fixed = T)[[1]][2] == "repro"){
     
-    dist.lwr = -10
-    dist.upr = 10
+    if(length(grep("age", strsplit(param[1], split = ".", fixed = T)[[1]])) > 0){
+      
+      dist.lwr = -20
+      dist.upr = 20
+    }
+    
+    else{
+      
+      dist.lwr = -20
+      dist.upr = 20
+    }
+    
   }
   
   # Recruitment priors
@@ -237,13 +299,13 @@ for(param in params.prior.post.overlap){
   # Fill in prior-posterior dataframe
   prior_post_param = data.frame(parameter = full_param,
                                 season = rep(c("wet", "dry"), 
-                                             each = 2 * nrow(lions_output_fullGLMM)),
+                                             each = 2 * nrow(lions_output_repro_recruit)),
                                 prior_post = rep(rep(c("prior", "posterior"), 
-                                                     each = nrow(lions_output_fullGLMM)), 2),
-                                distribution = c(runif(nrow(lions_output_fullGLMM), dist.lwr, dist.upr), 
-                                                 lions_output_fullGLMM[, grep(param, colnames(lions_output_fullGLMM))][, 1], 
-                                                 runif(nrow(lions_output_fullGLMM), dist.lwr, dist.upr), 
-                                                 lions_output_fullGLMM[, grep(param, colnames(lions_output_fullGLMM))][, 2]))
+                                                     each = nrow(lions_output_repro_recruit)), 2),
+                                distribution = c(runif(nrow(lions_output_repro_recruit), dist.lwr, dist.upr), 
+                                                 lions_output_repro_recruit[, grep(param, colnames(lions_output_repro_recruit))][, 1], 
+                                                 runif(nrow(lions_output_repro_recruit), dist.lwr, dist.upr), 
+                                                 lions_output_repro_recruit[, grep(param, colnames(lions_output_repro_recruit))][, 2]))
   
   # Merge data to the full dataframe
   prior_post_param_df = rbind(prior_post_param_df, prior_post_param)
@@ -292,7 +354,7 @@ for(i in 1:(length(temp) - 1)){
           panel.grid.minor = element_blank(),
           axis.line = element_line(colour = colPlot),
           axis.ticks = element_line(colour = colPlot),
-          plot.background = element_rect(fill = colBG, color = colBG, size = 0),
+          plot.background = element_rect(fill = colBG, color = colBG, linewidth = 0),
           plot.title = element_text(colour = colPlot, size = 8, family = font, hjust = 0, margin = margin(t = 0, r = 0, b = 15, l = 0)),
           legend.position = "right", 
           legend.justification = "right", 
@@ -304,7 +366,7 @@ for(i in 1:(length(temp) - 1)){
   
   if(i == 1){
     
-    png(filename = paste0("PriorPosteriorOverlap_", i, ".png"), 
+    png(filename = paste0("Output/Plots/Lions_Reproduction_Recruitment_PriorPosteriorOverlap_", i, ".png"), 
         width = 16, 
         height = 12, 
         units = "cm", 
@@ -319,7 +381,7 @@ for(i in 1:(length(temp) - 1)){
   
   else{
     
-    png(filename = paste0("PriorPosteriorOverlap_", i, ".png"), 
+    png(filename = paste0("Output/Plots/Lions_Reproduction_Recruitment_PriorPosteriorOverlap_", i, ".png"), 
         width = 16, 
         height = 16, 
         units = "cm", 
@@ -346,7 +408,7 @@ for(i in 1:(length(temp) - 1)){
 # ------------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_repro = lions_output_fullGLMM[, grep("repro", colnames(lions_output_fullGLMM))]
+lions_output_repro = lions_output_repro_recruit[, grep("repro", colnames(lions_output_repro_recruit))]
 lions_output_repro.epsilons = lions_output_repro[, grep("epsilon", colnames(lions_output_repro))]
 lions_output_repro = lions_output_repro[, - grep("epsilon", colnames(lions_output_repro))]
 lions_output_repro = lions_output_repro[, - grep("sigma", colnames(lions_output_repro))]
@@ -396,7 +458,7 @@ lions_output_repro_estimates$parameter_plot = rep(c("Mean reproduction probabili
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_fullGLMM_seasonal_coeffs) # Number of samples
+n = nrow(lions_output_repro_recruit) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_repro_estimates$parameter_plot))),
@@ -477,9 +539,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "Reproduction_Probability.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Reproduction_Probability_EffectSizes.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -489,8 +557,8 @@ png(filename = "Reproduction_Probability.png",
 
 repro_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season),
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0),
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -508,13 +576,13 @@ repro_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
-  scale_alpha_manual(name = "Overlapping zero",
+  scale_alpha_manual(name = "Overlapping 0",
                      labels = c("Yes", "No"),
-                     values = c(1, 0.4)) +
+                     values = c(0.7, 0.15)) +
   scale_y_discrete(labels = repro_y_labels) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-3, 4, 1), limits = c(-4, 2)) +
+  scale_x_continuous(name = "", breaks = seq(-20, 4, 4), limits = c(-20, 4)) +
   theme_general() +
   ggtitle("Reproduction probability") +
   theme(axis.line.y = element_blank(),
@@ -526,8 +594,8 @@ repro_plot
 dev.off()
 
 
-## 6.1.2. Plotting the effect sizes ----
-# ---------------------------------
+## 6.1.2. Plotting the predictions ----
+# --------------------------------
 
 # Function to calculate the predictions
 repro.estimate = function(season = "wet",
@@ -641,7 +709,7 @@ repro.season.estimates$upr = exp(apply(apply(repro.season.estimates,
                                              FUN = function(x) repro.estimate(season = x[1], habitat = x[2])), 
                                        2, FUN = function(x) quantile(x, probs = 0.95)))
 
-png(filename = "Predictions_ReproProb_SeasonHabitat.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_ReproProb_SeasonHabitat.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -675,10 +743,12 @@ dev.off()
 
 
 # Average reproduction probability with age
+age.values.unscaled = seq(2, 15)
+age.values = (age.values.unscaled - mu.age) / (2 * sd.age)
 
 # Empty prediction dataframe
 repro.age.estimates = expand.grid(season = c("wet", "dry"),
-                                  age = (seq(2, 15) - mean(females.data$age.at.capture, na.rm = T)) / (2 * sd(females.data$age.at.capture, na.rm = T)))
+                                  age = age.values)
 
 # Fill in prediction and credible intervals
 repro.age.estimates$pred = plogis(apply(apply(repro.age.estimates, 
@@ -702,7 +772,7 @@ repro.age.estimates$upr = plogis(apply(apply(repro.age.estimates,
 
 
 # Prediction plot
-png(filename = "Predictions_ReproProb_Age.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_ReproProb_Age.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -711,10 +781,10 @@ png(filename = "Predictions_ReproProb_Age.png",
     type = "cairo")
 
 ggplot(repro.age.estimates, aes(x = age, y = pred, colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) +
-  scale_x_continuous(breaks = seq(2, 15, 2),
-                     labels = seq(2, 15, 2)) +
+  scale_x_continuous(breaks = age.values[seq(1, length(age.values), 3)],
+                     labels = age.values.unscaled[seq(1, length(age.values), 3)]) +
   scale_color_manual(name = "Season",
                      labels = c("Dry", "Wet"),
                      values = c(cbbPalette[2], cbbPalette[4])) +
@@ -740,10 +810,12 @@ dev.off()
 
 
 # Average reproduction probability with number of females in the pride
+nb.af.pride.values.unscaled = seq(2, 12)
+nb.af.pride.values = (nb.af.pride.values.unscaled - mu.nb.af.pride) / (2 * sd.nb.af.pride)
 
 # Empty prediction dataframe
 repro.nb.af.pride.estimates = expand.grid(season = c("wet", "dry"),
-                                          nb.af.pride = (seq(2, 16) - mean(females.data$nb_af_pride, na.rm = T)) / (2 * sd(females.data$nb_af_pride, na.rm = T)))
+                                          nb.af.pride = nb.af.pride.values)
 
 # Fill in prediction and credible intervals
 repro.nb.af.pride.estimates$pred = plogis(apply(apply(repro.nb.af.pride.estimates, 
@@ -760,8 +832,24 @@ repro.nb.af.pride.estimates$upr = plogis(apply(apply(repro.nb.af.pride.estimates
                                                2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Empty observations dataframe
+repro.nb.af.pride.observed = expand.grid(season = c("wet", "dry"),
+                                         habitat = "grassland",
+                                         nb.af.pride.unscaled = nb.af.pride.values.unscaled)
+
+# Fill in observations
+repro.nb.af.pride.observed$reproduction = apply(repro.nb.af.pride.observed, 1, 
+                                                FUN = function(x){
+                                                  mean(females.data$reproduction[which(females.data$season == x[1] &
+                                                                                       females.data$habitat == x[2] &
+                                                                                       females.data$nb_af_pride == as.numeric(x[3]))], na.rm = T)
+                                                  
+                                                  }) 
+repro.nb.af.pride.observed$nb.af.pride = (repro.nb.af.pride.observed$nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+
+
 # Prediction plot
-png(filename = "Predictions_ReproProb_NbAFPride.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_ReproProb_NbAFPride.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -771,10 +859,12 @@ png(filename = "Predictions_ReproProb_NbAFPride.png",
 
 ggplot(repro.nb.af.pride.estimates, aes(x = nb.af.pride, y = pred, 
                                         colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) +
-  scale_x_continuous(breaks = seq(2, 16, 2),
-                     labels = seq(2, 16, 2)) +
+  geom_point(aes(x = repro.nb.af.pride.observed$nb.af.pride, y = repro.nb.af.pride.observed$reproduction,
+                 colour = repro.nb.af.pride.observed$season), alpha = 0.5, size = 1.2, shape = 16) +
+  scale_x_continuous(breaks = nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)],
+                     labels = nb.af.pride.values.unscaled[seq(1, length(nb.af.pride.values), 2)]) +
   scale_color_manual(name = "Season",
                      labels = c("Wet", "Dry"),
                      values = c(cbbPalette[4], cbbPalette[2])) +
@@ -801,10 +891,12 @@ dev.off()
 
 # Average reproduction probability with 
 # number of nomadic coalitions in the home range alone
+nb.nm.coal.hr.values.unscaled = seq(0, 5, 1)
+nb.nm.coal.hr.values = (nb.nm.coal.hr.values.unscaled - mu.nb.nm.coal.hr) / (2 * sd.nb.nm.coal.hr)
 
 # Empty prediction dataframe
 repro.nb.nm.coal.hr.estimates = expand.grid(season = c("wet", "dry"),
-                                            nb.nm.coal.hr = (seq(0, 15, 2) - mean(females.data$nb_nm_coal_hr, na.rm = T)) / (2 * sd(females.data$nb_nm_coal_hr, na.rm = T)))
+                                            nb.nm.coal.hr = nb.nm.coal.hr.values)
 
 # Fill in prediction and credible intervals
 repro.nb.nm.coal.hr.estimates$pred = plogis(apply(apply(repro.nb.nm.coal.hr.estimates, 
@@ -824,7 +916,7 @@ repro.nb.nm.coal.hr.estimates$upr = plogis(apply(apply(repro.nb.nm.coal.hr.estim
 
 
 # Prediction plot
-png(filename = "Predictions_ReproProb_NbNMCoalHR.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_ReproProb_NbNMCoalHR.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -834,10 +926,10 @@ png(filename = "Predictions_ReproProb_NbNMCoalHR.png",
 
 ggplot(repro.nb.nm.coal.hr.estimates, aes(x = nb.nm.coal.hr, y = pred,
                                           colour = season)) +
-  geom_line(size = 1.5) +
+  geom_line(linewidth = 1.5) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) +
   scale_x_continuous(breaks = nb.nm.coal.hr.values,
-                     labels = seq(0, 15, 2)) +
+                     labels = nb.nm.coal.hr.values.unscaled) +
   scale_color_manual(name = "Season",
                      labels = c("Dry", "Wet"),
                      values = c(cbbPalette[2], cbbPalette[4])) +
@@ -868,8 +960,8 @@ dev.off()
 # Empty prediction dataframe
 repro.nb.nm.coal.hr.nb.af.pride.estimates = expand.grid(season = c("wet", "dry"),
                                                         habitat = c("grassland", "woodland"),
-                                                        nb.af.pride = (seq(2, 16, 2) - mean(females.data$nb_af_pride, na.rm = T)) / (2 * sd(females.data$nb_af_pride, na.rm = T)),
-                                                        nb.nm.coal.hr = (seq(0, 15, 2) - mean(females.data$nb_nm_coal_hr, na.rm = T)) / (2 * sd(females.data$nb_nm_coal_hr, na.rm = T)))
+                                                        nb.af.pride = nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)],
+                                                        nb.nm.coal.hr = nb.nm.coal.hr.values)
 
 # Fill in prediction and credible intervals
 repro.nb.nm.coal.hr.nb.af.pride.estimates$pred = plogis(apply(apply(repro.nb.nm.coal.hr.nb.af.pride.estimates, 
@@ -909,7 +1001,7 @@ temp = c("2 females", "4 females", "6 females",
          "8 females", "10 females", "12 females")
 
 # Factorize number of females
-repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor = temp[match(repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride, nb.af.pride.values)]
+repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor = temp[match(repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride, nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)])]
 repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor = factor(repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor, 
                                                                       levels = c("2 females", 
                                                                                  "4 females", 
@@ -926,8 +1018,41 @@ repro.nb.nm.coal.hr.nb.af.pride.estimates$season[repro.nb.nm.coal.hr.nb.af.pride
 repro.nb.nm.coal.hr.nb.af.pride.estimates$season = as.factor(repro.nb.nm.coal.hr.nb.af.pride.estimates$season)
 
 
+# Empty observations dataframe
+repro.nb.nm.coal.hr.nb.af.pride.observed = expand.grid(season = "wet",
+                                                       habitat = "grassland",
+                                                       nb.af.pride.unscaled = nb.af.pride.values.unscaled,
+                                                       nb.nm.coal.hr.unscaled = seq(0, 5))
+
+# Fill in observations
+repro.nb.nm.coal.hr.nb.af.pride.observed$reproduction = apply(repro.nb.nm.coal.hr.nb.af.pride.observed, 1, 
+                               FUN = function(x){
+                                 
+                                 mean(females.data$reproduction[which(females.data$season == x[1] &
+                                                                      females.data$habitat == x[2] &
+                                                                      females.data$nb_af_pride == as.numeric(x[3]) &
+                                                                      females.data$nb_nm_coal_hr == as.numeric(x[4]))], na.rm = T)
+                               }) 
+repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride = (repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+repro.nb.nm.coal.hr.nb.af.pride.observed$nb.nm.coal.hr = (repro.nb.nm.coal.hr.nb.af.pride.observed$nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T))
+
+# Factorize number of females
+repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride.factor = temp[match(repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride, nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)])]
+repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride.factor = factor(repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride.factor, 
+                                                                      levels = c("2 females", 
+                                                                                 "4 females", 
+                                                                                 "6 females", 
+                                                                                 "8 females", 
+                                                                                 "10 females", 
+                                                                                 "12 females"))
+
+repro.nb.nm.coal.hr.nb.af.pride.observed = repro.nb.nm.coal.hr.nb.af.pride.observed[which(repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride %in% c(nb.af.pride.values[1], 
+                                                                                                                          nb.af.pride.values[7], 
+                                                                                                                          nb.af.pride.values[11])), ]
+
+
 # Prediction plot
-png(filename = "Predictions_ReproProb_NbNMCoalHRNbAFPride.png",
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_ReproProb_NbNMCoalHRNbAFPride.png",
     width = 6,
     height = 6,
     units = "cm",
@@ -935,26 +1060,65 @@ png(filename = "Predictions_ReproProb_NbNMCoalHRNbAFPride.png",
     res = 600,
     type = "cairo")
 
-ggplot(repro.nb.nm.coal.hr.nb.af.pride.estimates[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
-                                                       repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
-                                                       c(nb.af.pride.values[1], 
-                                                         nb.af.pride.values[4], 
-                                                         nb.af.pride.values[6])), ], 
-       aes(x = nb.nm.coal.hr, y = pred, color = nb.af.pride.factor, 
-           fill = nb.af.pride.factor)) +
-  facet_wrap(~ season) +
-  geom_line(size = 3) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+ggplot() +
+  geom_line(aes(x = repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.nm.coal.hr[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                        repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                        c(nb.af.pride.values[1], 
+                                                                                          nb.af.pride.values[7], 
+                                                                                          nb.af.pride.values[11]) &
+                                                                                        repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")], y = repro.nb.nm.coal.hr.nb.af.pride.estimates$pred[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                                                                                                                                                repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                                                                                                                                                c(nb.af.pride.values[1], 
+                                                                                                                                                                                                                  nb.af.pride.values[7], 
+                                                                                                                                                                                                                  nb.af.pride.values[11]) &
+                                                                                                                                                                                                                repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")], color = repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                                                                                                                                                                                                                                                                            repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                                                                                                                                                                                                                                                                            c(nb.af.pride.values[1], 
+                                                                                                                                                                                                                                                                                                                                              nb.af.pride.values[7], 
+                                                                                                                                                                                                                                                                                                                                              nb.af.pride.values[11]) &
+                                                                                                                                                                                                                                                                                                                                            repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")]), size = 1) +
+  geom_ribbon(aes(x = repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.nm.coal.hr[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                      repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                      c(nb.af.pride.values[1], 
+                                                                                        nb.af.pride.values[7], 
+                                                                                        nb.af.pride.values[11]) &
+                                                                                      repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")],
+                  ymin = repro.nb.nm.coal.hr.nb.af.pride.estimates$lwr[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                               repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                               c(nb.af.pride.values[1], 
+                                                                                 nb.af.pride.values[7], 
+                                                                                 nb.af.pride.values[11]) &
+                                                                               repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")], 
+                  ymax = repro.nb.nm.coal.hr.nb.af.pride.estimates$upr[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                               repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                               c(nb.af.pride.values[1], 
+                                                                                 nb.af.pride.values[7], 
+                                                                                 nb.af.pride.values[11]) &
+                                                                               repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")], fill = repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                                                                                                                                                        repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                                                                                                                                                        c(nb.af.pride.values[1], 
+                                                                                                                                                                                                                          nb.af.pride.values[7], 
+                                                                                                                                                                                                                          nb.af.pride.values[11]) &
+                                                                                                                                                                                                                        repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")], color = repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride.factor[which(repro.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
+                                                                                                                                                                                                                                                                                                                                                                  repro.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
+                                                                                                                                                                                                                                                                                                                                                                  c(nb.af.pride.values[1], 
+                                                                                                                                                                                                                                                                                                                                                                    nb.af.pride.values[7], 
+                                                                                                                                                                                                                                                                                                                                                                    nb.af.pride.values[11]) &
+                                                                                                                                                                                                                                                                                                                                                                  repro.nb.nm.coal.hr.nb.af.pride.estimates$season == "Wet")]), alpha = 0.2) +
+  geom_point(aes(x = repro.nb.nm.coal.hr.nb.af.pride.observed$nb.nm.coal.hr, 
+                 y = repro.nb.nm.coal.hr.nb.af.pride.observed$reproduction,
+                 colour = repro.nb.nm.coal.hr.nb.af.pride.observed$nb.af.pride.factor), alpha = 0.5, size = 1.2, shape = 16) +
   scale_x_continuous(breaks = nb.nm.coal.hr.values,
-                     labels = seq(0, 15, 2)) +
+                     labels = seq(0, 5, 1)) +
+  ylim(0, 1) +
   scale_color_manual(name = "Number of females\nin the pride",
                      labels = c("2 females", "8 females", "12 females"),
-                     values = viridis::viridis(3, option = "B", end = 0.8)) +
+                     values = carto_pal(10, "Geyser")[c(1, 3, 9)]) +
   scale_fill_manual(name = "Number of females\nin the pride",
                     labels = c("2 females", "8 females", "12 females"),
-                    values = viridis::viridis(3, option = "B", end = 0.8)) +
+                    values = carto_pal(10, "Geyser")[c(1, 3, 9)]) +
   xlab("Number of nomadic coalitions\nin the home range") +
-  ylab("Reproduction probability") +
+  ylab("Reproduction probability\n(wet season)") +
   labs(title = "Reproduction probability") + 
   theme_minimal() +
   theme(axis.line = element_line(colour = colPlot),
@@ -974,8 +1138,8 @@ dev.off()
 # -----------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_rec = lions_output_fullGLMM[, grep("rec", 
-                                                colnames(lions_output_fullGLMM))]
+lions_output_rec = lions_output_repro_recruit[, grep("rec", 
+                                                colnames(lions_output_repro_recruit))]
 lions_output_rec.epsilons = lions_output_rec[, grep("epsilon", 
                                                     colnames(lions_output_rec))]
 lions_output_rec = lions_output_rec[, - grep("epsilon", 
@@ -1020,7 +1184,7 @@ lions_output_rec_estimates$parameter_plot = rep(c("Mean recruitment",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_fullGLMM) # Number of samples
+n = nrow(lions_output_repro_recruit) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_rec_estimates$parameter_plot))),
@@ -1079,9 +1243,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "Recruitment.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Recruitment_EffectSizes.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -1091,8 +1261,8 @@ png(filename = "Recruitment.png",
 
 rec_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior,  # Density plot
-                       aes(x = posterior, y = variable, fill = season),
-                       color = NA, size = 1, alpha = 0.4, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0),
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -1110,12 +1280,12 @@ rec_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
-  scale_alpha_manual(name = "Significant",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+  scale_alpha_manual(name = "Overlapping 0",
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-1, 1, 1), limits = c(-1.4, 1)) +
+  scale_x_continuous(name = "", breaks = seq(-1, 1, 1), limits = c(-2, 1)) +
   theme_general() +
   ggtitle("Recruitment") +
   theme(axis.line.y = element_blank(),
@@ -1211,7 +1381,7 @@ rec.estimate = function(season = "wet",
 # Average survival per season and habitat
 
 # Empty prediction dataframe
-rec.mean.season.estimates = expand.grid(season = c("wet", "dry"),
+rec.season.estimates = expand.grid(season = c("wet", "dry"),
                                         habitat = c("grassland", "woodland"))
 
 # Fill in prediction and credible intervals
@@ -1230,7 +1400,7 @@ rec.season.estimates$upr = exp(apply(apply(rec.mean.season.estimates,
 
 
 # Prediction plot
-png(filename = "Predictions_Recruit_SeasonHabitat.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_Recruit_SeasonHabitat.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1267,7 +1437,7 @@ dev.off()
 
 # Empty prediction dataframe
 rec.nb.af.pride.estimates = expand.grid(season = c("wet", "dry"), 
-                                        nb.af.pride = (seq(1, 16, 1) - mean(females.data$nb_af_pride, na.rm = T)) / (2 * sd(females.data$nb_af_pride, na.rm = T)))
+                                        nb.af.pride = nb.af.pride.values)
 
 # Fill in prediction and credible intervals
 rec.nb.af.pride.estimates$pred = exp(apply(apply(rec.nb.af.pride.estimates, 
@@ -1290,7 +1460,7 @@ rec.nb.af.pride.estimates$upr = exp(apply(apply(rec.nb.af.pride.estimates,
 
 
 # Prediction plot
-png(filename = "Models_Output/Plots/Predictions_Recruit_SeasonalCoeffs_NbAFPride.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_Recruit_SeasonalCoeffs_NbAFPride.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1300,10 +1470,10 @@ png(filename = "Models_Output/Plots/Predictions_Recruit_SeasonalCoeffs_NbAFPride
 
 ggplot(rec.nb.af.pride.estimates, aes(x = nb.af.pride, y = pred, 
                                       colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) +
   scale_x_continuous(breaks = nb.af.pride.values,
-                     labels = seq(1, 16, 1)) +
+                     labels = nb.af.pride.values.unscaled) +
   scale_color_manual(name = "Season",
                      labels = c("Dry", "Wet"),
                      values = c(cbbPalette[2], cbbPalette[4])) +
@@ -1333,8 +1503,8 @@ dev.off()
 # Empty prediction dataframe 
 rec.nb.af.pride.nb.nm.coal.hr.estimates = expand.grid(season = c("wet", "dry"),
                                                       habitat = c("grassland", "woodland"),
-                                                      nb.af.pride = (seq(2, 12, 2) - mean(females.data$nb_af_pride, na.rm = T)) / (2 * sd(females.data$nb_af_pride, na.rm = T)),
-                                                      nb.nm.coal.hr = (seq(0, 15, 2) - mean(females.data$nb_nm_coal_hr, na.rm = T)) / (2 * sd(females.data$nb_nm_coal_hr, na.rm = T)))
+                                                      nb.af.pride = nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)],
+                                                      nb.nm.coal.hr = nb.nm.coal.hr.values)
 
 # Fill in prediction and credible intervals
 rec.nb.af.pride.nb.nm.coal.hr.estimates$pred = exp(apply(apply(rec.nb.af.pride.nb.nm.coal.hr.estimates, 
@@ -1390,7 +1560,7 @@ rec.nb.af.pride.nb.nm.coal.hr.estimates$season = as.factor(rec.nb.af.pride.nb.nm
 
 
 # Prediction plot
-png(filename = "Predictions_Recruit_NbAFPrideNbNMCoalHR.png",
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_Recruit_NbAFPrideNbNMCoalHR.png",
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1407,10 +1577,10 @@ ggplot(rec.nb.af.pride.nb.nm.coal.hr.estimates[which(rec.nb.af.pride.nb.nm.coal.
        aes(x = nb.af.pride, y = pred, color = nb.nm.coal.hr.factor, 
            fill = nb.nm.coal.hr.factor)) +
   facet_wrap(~ season) +
-  geom_line(size = 3) +
+  geom_line(linewidth = 3) +
   geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
-  scale_x_continuous(breaks = nb.af.pride.values,
-                     labels = seq(2, 12, 2)) +
+  scale_x_continuous(breaks = nb.af.pride.values[seq(1, length(nb.af.pride.values), 2)],
+                     labels = nb.af.pride.values.unscaled[seq(1, length(nb.af.pride.values), 2)]) +
   scale_color_manual(name = "Number of nomadic coalitions\nin the home range",
                      labels = c("No coalition", "6 coalitions", 
                                 "10 coalitions", "14 coalitions"),
@@ -1440,7 +1610,7 @@ dev.off()
 
 # Empty prediction dataframe
 rec.nb.nm.coal.hr.estimates = expand.grid(season = c("wet", "dry"), 
-                                          nb.nm.coal.hr = (seq(0, 15, 2) - mean(females.data$nb_nm_coal_hr, na.rm = T)) / (2 * sd(females.data$nb_nm_coal_hr, na.rm = T)))
+                                          nb.nm.coal.hr = nb.nm.coal.hr.values)
 
 # Fill in prediction and credible intervals
 rec.nb.nm.coal.hr.estimates$pred = exp(apply(apply(rec.nb.nm.coal.hr.estimates, 
@@ -1462,8 +1632,14 @@ rec.nb.nm.coal.hr.estimates$upr = exp(apply(apply(rec.nb.nm.coal.hr.estimates,
                                             FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Observations dataframe
+rec.nb.nm.coal.hr.observed = females.data[which(females.data$habitat == "grassland" &
+                                                !is.na(females.data$cubs) &
+                                                females.data$nb.nm.coal.hr.scaled %in% nb.nm.coal.hr.values), ]
+  
+
 # Prediction plot
-png(filename = "Predictions_Recruit_NbNMCoalHR.png", 
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_Recruit_NbNMCoalHR.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1471,12 +1647,18 @@ png(filename = "Predictions_Recruit_NbNMCoalHR.png",
     res = 600, 
     type = "cairo")
 
-ggplot(rec.nb.nm.coal.hr.estimates, aes(x = nb.nm.coal.hr, y = pred, 
-                                        colour = season)) +
-  geom_line(size = 1) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) +
+ggplot() +
+  geom_line(aes(x = rec.nb.nm.coal.hr.estimates$nb.nm.coal.hr, y = rec.nb.nm.coal.hr.estimates$pred, 
+                colour = rec.nb.nm.coal.hr.estimates$season), size = 1) +
+  geom_ribbon(aes(x = rec.nb.nm.coal.hr.estimates$nb.nm.coal.hr,
+                  ymin = rec.nb.nm.coal.hr.estimates$lwr, 
+                  ymax = rec.nb.nm.coal.hr.estimates$upr, fill = rec.nb.nm.coal.hr.estimates$season, 
+                  colour = rec.nb.nm.coal.hr.estimates$season), alpha = 0.2) +
+  geom_jitter(aes(x = rec.nb.nm.coal.hr.observed$nb.nm.coal.hr.scaled,
+                 y = rec.nb.nm.coal.hr.observed$cubs,
+                 colour = rec.nb.nm.coal.hr.observed$season), height = 0.2, alpha = 0.5, size = 1.2, shape = 16) +
   scale_x_continuous(breaks = nb.nm.coal.hr.values,
-                     labels = seq(0, 15, 2)) +
+                     labels = nb.nm.coal.hr.values.unscaled) +
   scale_color_manual(name = "Season",
                      labels = c("Wet", "Dry"),
                      values = c(cbbPalette[4], cbbPalette[2])) +
@@ -1484,7 +1666,7 @@ ggplot(rec.nb.nm.coal.hr.estimates, aes(x = nb.nm.coal.hr, y = pred,
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   xlab("Number of nomadic coalitions\nin the home range") +
-  ylab("Recruitment\n ") +
+  ylab("Recruitment to 1 year old\n") +
   labs(title = "Recruitment") + 
   theme_minimal() +
   theme(axis.line = element_line(colour = colPlot),
@@ -1560,7 +1742,7 @@ rec.nb.nm.coal.hr.nb.af.pride.estimates$season = as.factor(rec.nb.nm.coal.hr.nb.
 
 
 # Prediction plot
-png(filename = "Predictions_Recruit_NbNMCoalHRNbAFPride.png",
+png(filename = "Output/Plots/Lions_Reproduction_Recruitment_Predictions_Recruit_NbNMCoalHRNbAFPride.png",
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1571,15 +1753,15 @@ png(filename = "Predictions_Recruit_NbNMCoalHRNbAFPride.png",
 ggplot(rec.nb.nm.coal.hr.nb.af.pride.estimates[which(rec.nb.nm.coal.hr.nb.af.pride.estimates$habitat == "grassland" & 
                                                      rec.nb.nm.coal.hr.nb.af.pride.estimates$nb.af.pride %in% 
                                                      c(nb.af.pride.values[1], 
-                                                       nb.af.pride.values[4], 
-                                                       nb.af.pride.values[6])), ], 
+                                                       nb.af.pride.values[7], 
+                                                       nb.af.pride.values[11])), ], 
        aes(x = nb.nm.coal.hr, y = pred, color = nb.af.pride.factor, 
            fill = nb.af.pride.factor)) +
   facet_wrap(~ season) +
-  geom_line(size = 3) +
+  geom_line(linewidth = 3) +
   geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
   scale_x_continuous(breaks = nb.nm.coal.hr.values,
-                     labels = seq(0, 15, 2)) +
+                     labels = nb.nm.coal.hr.values.unscaled) +
   scale_color_manual(name = "Number of females\nin the pride",
                      labels = c("2 females", "8 females", "12 females"),
                      values = viridis::viridis(3, option = "B", end = 0.8)) +
@@ -1635,7 +1817,7 @@ params.labels = data.frame(# Output model column name
                                          "13"),
                            # Full parameter name
                            param.name = c("Reproduction probability",
-                                          "Recruitment",
+                                          "Recruitment to 1 year old",
                                           "Adult-female survival",
                                           "Young-male survival",
                                           "Nomadic-male survival",
@@ -1695,8 +1877,8 @@ for(p in 1:nrow(params.labels[1:2, ])){
   epsilon.colname = paste0("epsilon.", param[1]) # Get model output column name
   
   # Subset wet-season epsilons
-  epsilons_wet = lions_output_fullGLMM[, grep(epsilon.colname,
-                                              colnames(lions_output_fullGLMM))] 
+  epsilons_wet = lions_output_repro_recruit[, grep(epsilon.colname,
+                                              colnames(lions_output_repro_recruit))] 
   epsilons_wet = epsilons_wet[, seq(1, 59, 2)]
   
   # Get mean epsilons and credible intervals
@@ -1711,8 +1893,8 @@ for(p in 1:nrow(params.labels[1:2, ])){
                                                               FUN = function(x) quantile(x, probs = 0.05))
   
   # Subset dry-season epsilons
-  epsilons_dry = lions_output_fullGLMM[, grep(epsilon.colname, 
-                                              colnames(lions_output_fullGLMM))] 
+  epsilons_dry = lions_output_repro_recruit[, grep(epsilon.colname, 
+                                              colnames(lions_output_repro_recruit))] 
   epsilons_dry = epsilons_dry[, seq(2, 60, 2)]
   
   # Get mean epsilons and credible intervals
@@ -1734,7 +1916,7 @@ epsilon_df$parameter = factor(epsilon_df$parameter,
 
 # Plot yearly epsilons
 plot.epsilon.post = 
-  ggplot(epsilon_df, aes(x = year, y = mean, colour = season)) +
+  ggplot(epsilon_df, aes(x = year, y = median, colour = season)) +
   facet_wrap(~ parameter, ncol = 3, scales = "free_y") +
   geom_line() +
   geom_ribbon(aes(ymin = lwr, ymax = upr, fill = season), alpha = 0.2) + 
@@ -1754,7 +1936,7 @@ plot.epsilon.post =
         panel.grid.minor = element_blank(),
         axis.line = element_line(colour = colPlot),
         axis.ticks = element_line(colour = colPlot),
-        plot.background = element_rect(fill = colBG, color = colBG, size = 0),
+        plot.background = element_rect(fill = colBG, color = colBG, linewidth = 0),
         plot.title = element_text(colour = colPlot, size = fontSize, family = font, hjust = 0, margin = margin(t = 0, r = 0, b = 15, l = 0)),
         legend.position = "right", 
         legend.justification = "right", 
@@ -1763,7 +1945,7 @@ plot.epsilon.post =
         legend.title = element_text(colour = colPlot, size = 8, family = font),
         legend.key.size = unit(15, "pt"))
 
-png(filename = paste0("EpsilonPosteriorDistributions.png"), 
+png(filename = paste0("Output/Plots/Lions_Reproduction_Recruitment_EpsilonPosteriorDistributions.png"), 
     width = 16, 
     height = 17, 
     units = "cm", 
