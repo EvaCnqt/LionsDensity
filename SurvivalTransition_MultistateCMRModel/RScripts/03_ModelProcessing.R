@@ -33,57 +33,70 @@ library(bayestestR)
 ## 1.3. Loading data ----
 # ------------------
 
+# Lions demographic data
+lions.demo.data = read.csv("Data/012_LionsDemographicData.csv")
+
 # Year
 year = read.csv("Data/021_Covariate_Year.csv", stringsAsFactors = F)$x
+
+# Density-dependent covariates
+nb.af.pride.unscaled = read.csv("Data/024_Covariate_NbAFpride.csv", stringsAsFactors = F, row.names = 1)
+nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
+range(nb.af.pride.unscaled, na.rm = T)
+nb.af.pride = (nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+
+age.unscaled = read.csv("Data/025_Covariate_Age.csv", row.names = 1)
+age.unscaled = as.matrix(age.unscaled)
+range(age.unscaled, na.rm = T)
+age = (age.unscaled - mean(age.unscaled, na.rm = T)) / (2 * sd(age.unscaled, na.rm = T))
+
+coal.size.unscaled = read.csv("Data/026_Covariate_CoalSize.csv", row.names = 1)
+coal.size.unscaled = as.matrix(coal.size.unscaled)
+range(coal.size.unscaled, na.rm = T)
+coal.size = (coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / (2 * sd(coal.size.unscaled, na.rm = T))
+
+nb.nm.coal.hr.unscaled = read.csv("Data/027_Covariate_NbNMCoalHR.csv", row.names = 1)
+nb.nm.coal.hr.unscaled = as.matrix(nb.nm.coal.hr.unscaled)
+range(nb.nm.coal.hr.unscaled, na.rm = T)
+nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T))
 
 
 # MCMC samples
 
 # This allows you to open the samples provided with the code.
-lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
+load("Output/Lions_MultistateModel_MCMCSamples.RData")
+
+data.no.burnin.mcmc.list = as.mcmc.list(list(as.mcmc(lions_output_multistate[1:45000, ]),
+                                             as.mcmc(lions_output_multistate[45001:90000, ]),
+                                             as.mcmc(lions_output_multistate[90001:135000, ]),
+                                             as.mcmc(lions_output_multistate[135001:180000, ])))
 
 # If you have run your own model using the two previous scripts, you can process the MCMC output with the commented code hereafter:
 
 # # Getting list of output file names
-# files.list = file.info(list.files(path = "Output", pattern = "LionsFullMultistateModel_Output"))[with(file.info(list.files(path = "Output", pattern = "LionsFullMultistateModel_Output")), order(as.POSIXct(mtime))), ]
+# files.list = file.info(list.files(path = "Output", pattern = "Lions_MultistateModel_MCMCOutput"))[with(file.info(list.files(path = "Output", pattern = "Lions_MultistateModel_MCMCOutput")), order(as.POSIXct(mtime))), ]
 # files.list = rownames(files.list)
-# files.list = lapply(files.list, FUN = function(x) paste("Output/LionsFullMultistateModel_Output/", x, sep = ""))
-# 
+# files.list = lapply(files.list, FUN = function(x) paste("Output/", x, sep = ""))
 # 
 # # Loading each file, store it in a separate object, and clear
 # load(files.list[[1]])
-# output1 = res.iter.set
-# rm(res.iter.set)
+# output1 = lions_multistate_output
+# rm(lions_multistate_output)
 # load(files.list[[2]])
-# output2 = res.iter.set
-# rm(res.iter.set)
+# output2 = lions_multistate_output
+# rm(lions_multistate_output)
 # load(files.list[[3]])
-# output3 = res.iter.set
-# rm(res.iter.set)
+# output3 = lions_multistate_output
+# rm(lions_multistate_output)
 # load(files.list[[4]])
-# output4 = res.iter.set
-# rm(res.iter.set)
+# output4 = lions_multistate_output
+# rm(lions_multistate_output)
 # load(files.list[[5]])
-# output5 = res.iter.set
-# rm(res.iter.set)
+# output5 = lions_multistate_output
+# rm(lions_multistate_output)
 # load(files.list[[6]])
-# output6 = res.iter.set
-# rm(res.iter.set)
-# load(files.list[[7]])
-# output7 = res.iter.set
-# rm(res.iter.set)
-# load(files.list[[8]])
-# output8 = res.iter.set
-# rm(res.iter.set)
-# load(files.list[[9]])
-# output9 = res.iter.set
-# rm(res.iter.set)
-# load(files.list[[10]])
-# output10 = res.iter.set
-# rm(res.iter.set)
-# load(files.list[[11]])
-# output11 = res.iter.set
-# rm(res.iter.set)
+# output6 = lions_multistate_output
+# rm(lions_multistate_output)
 # 
 # 
 # # Dividing outputs by chain
@@ -117,77 +130,32 @@ lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
 # output6_chain3 = output6[[3]]
 # output6_chain4 = output6[[4]]
 # 
-# output7_chain1 = output7[[1]]
-# output7_chain2 = output7[[2]]
-# output7_chain3 = output7[[3]]
-# output7_chain4 = output7[[4]]
-# 
-# output8_chain1 = output8[[1]]
-# output8_chain2 = output8[[2]]
-# output8_chain3 = output8[[3]]
-# output8_chain4 = output8[[4]]
-# 
-# output9_chain1 = output9[[1]]
-# output9_chain2 = output9[[2]]
-# output9_chain3 = output9[[3]]
-# output9_chain4 = output9[[4]]
-# 
-# output10_chain1 = output10[[1]]
-# output10_chain2 = output10[[2]]
-# output10_chain3 = output10[[3]]
-# output10_chain4 = output10[[4]]
-# 
-# output11_chain1 = output11[[1]]
-# output11_chain2 = output11[[2]]
-# output11_chain3 = output11[[3]]
-# output11_chain4 = output11[[4]]
-# 
 # 
 # # Merging datasets
-# output_chain1 = rbind(output1_chain1, 
-#                       output2_chain1, 
+# output_chain1 = rbind(output1_chain1,
+#                       output2_chain1,
 #                       output3_chain1,
 #                       output4_chain1,
 #                       output5_chain1,
-#                       output6_chain1,
-#                       output7_chain1,
-#                       output8_chain1,
-#                       output9_chain1,
-#                       output10_chain1,
-#                       output11_chain1)
-# output_chain2 = rbind(output1_chain2, 
-#                       output2_chain2, 
+#                       output6_chain1)
+# output_chain2 = rbind(output1_chain2,
+#                       output2_chain2,
 #                       output3_chain2,
 #                       output4_chain2,
 #                       output5_chain2,
-#                       output6_chain2,
-#                       output7_chain2,
-#                       output8_chain2,
-#                       output9_chain2,
-#                       output10_chain2,
-#                       output11_chain2)
-# output_chain3 = rbind(output1_chain3, 
-#                       output2_chain3, 
+#                       output6_chain2)
+# output_chain3 = rbind(output1_chain3,
+#                       output2_chain3,
 #                       output3_chain3,
 #                       output4_chain3,
 #                       output5_chain3,
-#                       output6_chain3,
-#                       output7_chain3,
-#                       output8_chain3,
-#                       output9_chain3,
-#                       output10_chain3,
-#                       output11_chain3)
-# output_chain4 = rbind(output1_chain4, 
-#                       output2_chain4, 
+#                       output6_chain3)
+# output_chain4 = rbind(output1_chain4,
+#                       output2_chain4,
 #                       output3_chain4,
 #                       output4_chain4,
 #                       output5_chain4,
-#                       output6_chain4,
-#                       output7_chain4,
-#                       output8_chain4,
-#                       output9_chain4,
-#                       output10_chain4,
-#                       output11_chain4)
+#                       output6_chain4)
 # 
 # # Creating an mcmc object with all three chains
 # data.full.mcmc.list = as.mcmc.list(list(as.mcmc(output_chain1),
@@ -196,19 +164,20 @@ lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
 #                                         as.mcmc(output_chain4)))
 # 
 # # Removing 10000 iterations of burnin
-# data.no.burnin.mcmc.list = as.mcmc.list(list(as.mcmc(output_chain1[10001:nrow(output_chain1),]),
-#                                              as.mcmc(output_chain2[10001:nrow(output_chain2),]),
-#                                              as.mcmc(output_chain3[10001:nrow(output_chain3),]),
-#                                              as.mcmc(output_chain4[10001:nrow(output_chain4),])))
+# data.no.burnin.mcmc.list = as.mcmc.list(list(as.mcmc(output_chain1[15001:nrow(output_chain1),]),
+#                                              as.mcmc(output_chain2[15001:nrow(output_chain2),]),
+#                                              as.mcmc(output_chain3[15001:nrow(output_chain3),]),
+#                                              as.mcmc(output_chain4[15001:nrow(output_chain4),])))
 # 
 # 
 # # Put results into a matrix
-# lions_output_GLMM = as.matrix(rbind(data.no.burnin.mcmc.list[[1]],
-#                                     data.no.burnin.mcmc.list[[2]],
-#                                     data.no.burnin.mcmc.list[[3]],
-#                                     data.no.burnin.mcmc.list[[4]]))
-
-
+# lions_output_multistate = as.matrix(rbind(data.no.burnin.mcmc.list[[1]],
+#                                           data.no.burnin.mcmc.list[[2]],
+#                                           data.no.burnin.mcmc.list[[3]],
+#                                           data.no.burnin.mcmc.list[[4]]))
+# 
+# # Saving samples as csv
+# save(lions_output_multistate, file = "Output/Lions_MultistateModel_MCMCSamples.RData")
 
 
 ###########################################################################
@@ -312,10 +281,12 @@ params.to.plot = params.to.plot[- grep("sigma", params.to.plot)]
 
 # Traceplots of all chains
 MCMCtrace(data.full.mcmc.list, 
-          iter = nrow(output_chain1), # Plot all iterations 
+          iter = nrow(data.no.burnin.mcmc.list[[1]]), # Plot all iterations 
           params = params.to.plot, # Parameters to plot
-          priors = runif(nrow(output_chain1) * 4, -10, 10), # Priors to get the prior-posterior overlaps 
-          filename = "CMR_MCMCtrace.pdf")
+          priors = runif(nrow(data.no.burnin.mcmc.list[[1]]) * 4, -10, 10), # Priors to get the prior-posterior overlaps 
+          pdf = T,
+          open_pdf = F,
+          filename = "Output/Plots/Lions_MultistateModel_MCMCtrace.pdf")
 
 
 
@@ -350,7 +321,7 @@ theme_general = function(){
           panel.grid.minor = element_blank(),
           axis.line = element_line(colour = colPlot),
           axis.ticks = element_line(colour = colPlot),
-          plot.background = element_rect(fill = colBG, color = colBG, size = 0),
+          plot.background = element_rect(fill = colBG, color = colBG, linewidth = 0),
           plot.title = element_text(colour = colPlot, size = 10, family = font, 
                                     hjust = 0, 
                                     margin = margin(t = 0, r = 0, b = 15, l = 0)),
@@ -429,6 +400,7 @@ for(param in params.to.plot){
   # Full parameter name
   full_param = param_full_name$param_full[which(param_full_name$param_short == param)]
   
+  
   # For the parameter of the effect of nomadic males on old subadults,
   # which has only one average estimate
   if(param == "s.sa2.beta.nb.nm.coal.hr"){
@@ -436,9 +408,9 @@ for(param in params.to.plot){
     prior_post_param = data.frame(parameter = full_param,
                                   season = NA,
                                   prior_post = rep(c("prior", "posterior"), 
-                                                   each = nrow(lions_output_GLMM)),
-                                  distribution = c(runif(nrow(lions_output_GLMM), -10, 10), 
-                                                   lions_output_GLMM[, grep(param, colnames(lions_output_GLMM))]))
+                                                   each = nrow(lions_output_multistate)),
+                                  distribution = c(runif(nrow(lions_output_multistate), -10, 10), 
+                                                   lions_output_multistate[, grep(param, colnames(lions_output_multistate))]))
     
   }
   
@@ -447,13 +419,13 @@ for(param in params.to.plot){
     
     prior_post_param = data.frame(parameter = full_param,
                                   season = rep(c("wet", "dry"), 
-                                               each = 2 * nrow(lions_output_GLMM)),
+                                               each = 2 * nrow(lions_output_multistate)),
                                   prior_post = rep(rep(c("prior", "posterior"), 
-                                                       each = nrow(lions_output_GLMM)), 2),
-                                  distribution = c(runif(nrow(lions_output_GLMM), -10, 10), 
-                                                   lions_output_GLMM[, grep(param, colnames(lions_output_GLMM))][, 1], 
-                                                   runif(nrow(lions_output_GLMM), -10, 10), 
-                                                   lions_output_GLMM[, grep(param, colnames(lions_output_GLMM))][, 2]))
+                                                       each = nrow(lions_output_multistate)), 2),
+                                  distribution = c(runif(nrow(lions_output_multistate), -10, 10), 
+                                                   lions_output_multistate[, grep(param, colnames(lions_output_multistate))][, 1], 
+                                                   runif(nrow(lions_output_multistate), -10, 10), 
+                                                   lions_output_multistate[, grep(param, colnames(lions_output_multistate))][, 2]))
 
   }
   
@@ -505,7 +477,7 @@ for(i in 1:length(temp)){
         panel.grid.minor = element_blank(),
         axis.line = element_line(colour = colPlot),
         axis.ticks = element_line(colour = colPlot),
-        plot.background = element_rect(fill = colBG, color = colBG, size = 0),
+        plot.background = element_rect(fill = colBG, color = colBG, linewidth = 0),
         plot.title = element_text(colour = colPlot, size = 8, family = font, 
                                   hjust = 0, margin = margin(t = 0, r = 0, b = 15, l = 0)),
         legend.position = "right", 
@@ -517,7 +489,7 @@ for(i in 1:length(temp)){
         strip.text = element_text(size = 8, margin = margin(b = 10)))
 
 
-png(filename = paste0("PriorPosteriorOverlap_", i, ".png"), 
+png(filename = paste0("Output/Plots/Lions_MultistateModel_PriorPosteriorOverlap_", i, ".png"), 
     width = 16, 
     height = 12, 
     units = "cm", 
@@ -543,7 +515,7 @@ dev.off()
 # -----------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.sa1 = lions_output_GLMM[, grep("s.sa1.", colnames(lions_output_GLMM))]
+lions_output_s.sa1 = lions_output_multistate[, grep("s.sa1.", colnames(lions_output_multistate))]
 lions_output_s.sa1.epsilons = lions_output_s.sa1[, grep("epsilon", colnames(lions_output_s.sa1))]
 lions_output_s.sa1 = lions_output_s.sa1[, - grep("epsilon", colnames(lions_output_s.sa1))]
 lions_output_s.sa1 = lions_output_s.sa1[, - grep("sigma", colnames(lions_output_s.sa1))]
@@ -582,7 +554,7 @@ lions_output_s.sa1_estimates$parameter_plot = rep(c("Mean survival",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_s.sa1_estimates$parameter_plot))),
@@ -639,9 +611,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "SA1_Survival.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_SA1_Survival.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -652,8 +630,8 @@ png(filename = "SA1_Survival.png",
 sa1surv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
                        aes(x = posterior, y = variable, 
-                           fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                           fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) + 
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -671,12 +649,12 @@ sa1surv_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
-  scale_alpha_manual(name = "Overlapping zero",
-                     labels = c("No", "Yes"),
-                     values = c(1, 0.4)) +
+  scale_alpha_manual(name = "Overlapping 0",
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-5.7, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-6, 10, 2), limits = c(-5.8, 10)) +
   theme_general() +
   ggtitle("Young-subadult survival") +
   theme(axis.line.y = element_blank(),
@@ -700,13 +678,13 @@ ys.survival.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.sa1", 
-                                         colnames(lions_output_GLMM))][, 1]
+    mean.surv = lions_output_multistate[, grep("mu.s.sa1", 
+                                         colnames(lions_output_multistate))][, 1]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.sa1.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 1]
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.sa1.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 1]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.sa1.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.sa1.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.sa1.epsilons[, seq(1, 59, 2)], 1, median)
@@ -714,15 +692,15 @@ ys.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.sa1.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.sa1.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -730,13 +708,13 @@ ys.survival.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.sa1", 
-                                         colnames(lions_output_GLMM))][, 2]
+    mean.surv = lions_output_multistate[, grep("mu.s.sa1", 
+                                         colnames(lions_output_multistate))][, 2]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.sa1.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 2]
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.sa1.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 2]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.sa1.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.sa1.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.sa1.epsilons[, seq(2, 60, 2)], 1, median)
@@ -744,15 +722,15 @@ ys.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.sa1.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.sa1.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -787,8 +765,20 @@ ys.season.habitat.estimates$upr = plogis(apply(apply(ys.season.habitat.estimates
                                                2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Observations dataframe
+ys.season.habitat.observed = expand.grid(season = c("wet", "dry"),
+                                         habitat = c("grassland", "woodland"))
+ys.season.habitat.observed$surv = apply(ys.season.habitat.observed, 1, 
+                                        FUN = function(x){
+                                          
+                                          mean(lions.demo.data$survival[which(lions.demo.data$stage == "SA1" &
+                                                                              lions.demo.data$season == x[1] &
+                                                                              lions.demo.data$habitat == x[2])], na.rm = T)
+                                        }) 
+
+
 # Prediction plot
-png(filename = "Predictions_SA1_Survival_Habitat_Season.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_Predictions_SA1_Survival_Habitat_Season.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -799,6 +789,9 @@ png(filename = "Predictions_SA1_Survival_Habitat_Season.png",
 ggplot(ys.season.habitat.estimates, aes(x = season, y = pred, 
                                         colour = habitat)) +
   geom_point(position = position_dodge(0.8)) +
+  geom_point(aes(x = ys.season.habitat.observed$season, y = ys.season.habitat.observed$surv,
+                 colour = ys.season.habitat.observed$habitat),
+             position = position_dodge(0.8)) +
   geom_errorbar(aes(ymin = lwr, ymax = upr), 
                 position = position_dodge(0.8), width = 0.5) +
   scale_x_discrete(labels = c("Wet", "Dry")) +
@@ -829,6 +822,7 @@ dev.off()
 ys.nb.af.estimates = expand.grid(season = c("wet", "dry"),
                                  nb.af.pride = (seq(1, 12) - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T)),
                                  pred = NA)
+ys.nb.af.estimates$nb.af.pride.unscaled = ys.nb.af.estimates$nb.af.pride * (2 * sd(nb.af.pride.unscaled, na.rm = T)) + mean(nb.af.pride.unscaled, na.rm = T)
 
 # Fill in prediction and credible intervals
 ys.nb.af.estimates$pred = plogis(apply(apply(ys.nb.af.estimates, 
@@ -845,8 +839,22 @@ ys.nb.af.estimates$upr = plogis(apply(apply(ys.nb.af.estimates,
                                       2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Observations dataframe
+ys.nb.af.observed = expand.grid(season = c("wet", "dry"),
+                                nb.af.pride.unscaled = seq(1, 12))
+
+ys.nb.af.observed$surv = apply(ys.nb.af.observed, 1, 
+                                        FUN = function(x){
+                                          
+                                          mean(lions.demo.data$survival[which(lions.demo.data$stage == "SA1" &
+                                                                              lions.demo.data$season == x[1] &
+                                                                              lions.demo.data$nb_af_pride == as.numeric(x[2]))], na.rm = T)
+                                        }) 
+ys.nb.af.observed$nb.af.pride = (ys.nb.af.observed$nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+
+
 # Prediction plot
-png(filename = "Predictions_SA1_Survival_NbAFPride.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_Predictions_SA1_Survival_NbAFPride.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -856,9 +864,11 @@ png(filename = "Predictions_SA1_Survival_NbAFPride.png",
 
 ggplot(ys.nb.af.estimates, aes(x = nb.af.pride, y = pred, 
                                colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, 
                   colour = season, fill = season), alpha = 0.2) +
+  geom_point(aes(x = ys.nb.af.observed$nb.af.pride, y = ys.nb.af.observed$surv,
+                 colour = ys.nb.af.observed$season)) +
   scale_x_continuous(breaks = unique(ys.nb.af.estimates$nb.af.pride),
                      labels = seq(1, 12)) +
   scale_color_manual(name = "Season",
@@ -907,6 +917,21 @@ ys.nb.nm.coal.estimates$upr = plogis(apply(apply(ys.nb.nm.coal.estimates,
                                            2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Observations dataframe
+ys.nb.nm.coal.observed = expand.grid(season = c("wet", "dry"),
+                                     nb.nm.coal.hr.unscaled = seq(0, 6))
+
+ys.nb.nm.coal.observed$surv = apply(ys.nb.nm.coal.observed, 1, 
+                               FUN = function(x){
+                                 
+                                 mean(lions.demo.data$survival[which(lions.demo.data$stage == "SA1" &
+                                                                       lions.demo.data$season == x[1] &
+                                                                       lions.demo.data$nb_nm_coal_hr == as.numeric(x[2]))], na.rm = T)
+                               }) 
+ys.nb.nm.coal.observed$nb.nm.coal.hr = (ys.nb.nm.coal.observed$nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T))
+
+
+
 # Prediction plot
 png(filename = "Predictions_SA1_Survival_NbNMCoalHR.png", 
     width = 6, 
@@ -918,9 +943,11 @@ png(filename = "Predictions_SA1_Survival_NbNMCoalHR.png",
 
 ggplot(ys.nb.nm.coal.estimates, aes(x = nb.nm.coal.hr, y = pred, 
                                     colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, 
                   fill = season), alpha = 0.2) +
+  geom_point(aes(x = ys.nb.nm.coal.observed$nb.nm.coal.hr, y = ys.nb.nm.coal.observed$surv,
+                 colour = ys.nb.nm.coal.observed$season)) +
   scale_x_continuous(breaks = unique(ys.nb.nm.coal.estimates$nb.nm.coal.hr),
                      labels = seq(0, 6)) +
   scale_color_manual(name = "Season",
@@ -951,8 +978,8 @@ dev.off()
 # -----------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.sa2 = lions_output_GLMM[, grep("s.sa2.", 
-                                              colnames(lions_output_GLMM))]
+lions_output_s.sa2 = lions_output_multistate[, grep("s.sa2.", 
+                                              colnames(lions_output_multistate))]
 lions_output_s.sa2.epsilons = lions_output_s.sa2[, grep("epsilon", 
                                                         colnames(lions_output_s.sa2))]
 lions_output_s.sa2 = lions_output_s.sa2[, - grep("epsilon", 
@@ -993,7 +1020,7 @@ lions_output_s.sa2_estimates$parameter_plot = c(rep(c("Mean female survival",
                                                 "Number of nomadic\ncoalitions in the home range")
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = c(rep(rep(c("Wet", "Dry"), each = n), 
                                               length(unique(lions_output_s.sa2_estimates$parameter_plot)) - 1), 
@@ -1054,6 +1081,17 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = NA
+
+df.plot.posterior$overlapping0[which(df.plot.posterior$variable != "Number of nomadic\ncoalitions in the home range")] = apply(df.plot.posterior[which(df.plot.posterior$variable != "Number of nomadic\ncoalitions in the home range"), ], 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
+df.plot.posterior$overlapping0[which(df.plot.posterior$variable == "Number of nomadic\ncoalitions in the home range")] = TRUE
+
+
 # Plot effect size
 png(filename = "SA2_Survival.png", 
     width = 12, 
@@ -1065,8 +1103,8 @@ png(filename = "SA2_Survival.png",
 
 sa2surv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plots
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) + 
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -1084,12 +1122,12 @@ sa2surv_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
-  scale_alpha_manual(name = "Overlapping zero",
+  scale_alpha_manual(name = "Overlapping 0",
                      labels = c("Yes", "No"),
-                     values = c(1, 0.4)) +
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-4.6, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-4.6, 10)) +
   theme_general() +
   ggtitle("Old-subadult survival") +
   theme(axis.line.y = element_blank(),
@@ -1116,24 +1154,24 @@ os.survival.estimate = function(sex = "female",
     # Get mean female survival
     if(sex == "female"){
       
-      mean.surv = lions_output_GLMM[, grep("mu.s.sa2f", 
-                                           colnames(lions_output_GLMM))][, 1]
+      mean.surv = lions_output_multistate[, grep("mu.s.sa2f", 
+                                           colnames(lions_output_multistate))][, 1]
       
     }
     
     # Get mean male survival
     else{
       
-      mean.surv = lions_output_GLMM[, grep("mu.s.sa2m", 
-                                           colnames(lions_output_GLMM))][, 1]
+      mean.surv = lions_output_multistate[, grep("mu.s.sa2m", 
+                                           colnames(lions_output_multistate))][, 1]
       
     }
     
     # Get wet-season parameter values
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.sa2.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 1]
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.sa2.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.sa2.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.sa2.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.sa2.epsilons[, seq(1, 59, 2)], 1, median)
@@ -1141,15 +1179,15 @@ os.survival.estimate = function(sex = "female",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.sa2.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.sa2.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -1159,24 +1197,24 @@ os.survival.estimate = function(sex = "female",
     # Get mean female survival
     if(sex == "female"){
       
-      mean.surv = lions_output_GLMM[, grep("mu.s.sa2f", 
-                                           colnames(lions_output_GLMM))][, 2]
+      mean.surv = lions_output_multistate[, grep("mu.s.sa2f", 
+                                           colnames(lions_output_multistate))][, 2]
       
     }
     
     # Get mean male survival
     else{
       
-      mean.surv = lions_output_GLMM[, grep("mu.s.sa2m", 
-                                           colnames(lions_output_GLMM))][, 2]
+      mean.surv = lions_output_multistate[, grep("mu.s.sa2m", 
+                                           colnames(lions_output_multistate))][, 2]
       
     }
     
     # Get dry-season parameter values
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.sa2.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 2]
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.sa2.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.sa2.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.sa2.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.sa2.epsilons[, seq(2, 60, 2)], 1, median)
@@ -1184,15 +1222,15 @@ os.survival.estimate = function(sex = "female",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dty-season habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.sa2.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.sa2.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -1307,8 +1345,25 @@ os.nb.af.estimates$upr = plogis(apply(apply(os.nb.af.estimates,
 os.nb.af.estimates = aggregate(cbind(pred, lwr, upr) ~ season + nb.af.pride, 
                                data = os.nb.af.estimates, FUN = mean)
 
+
+# Empty observations dataframe
+os.nb.af.observed = expand.grid(season = c("dry", "wet"), 
+                                habitat = "grassland",
+                                nb.af.pride.unscaled = seq(1, 12))
+
+# Fill in observations
+os.nb.af.observed$surv = apply(os.nb.af.observed, 1, 
+                               FUN = function(x){
+                                 mean(lions.demo.data$survival[which(lions.demo.data$stage == "SA2" &
+                                                                     lions.demo.data$season == x[1] &
+                                                                     lions.demo.data$habitat == x[2] &
+                                                                     lions.demo.data$nb_af_pride == as.numeric(x[3]))], na.rm = T)
+                                                              }) 
+os.nb.af.observed$nb.af.pride = (os.nb.af.observed$nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / (2 * sd(nb.af.pride.unscaled, na.rm = T))
+
+
 # Prediction plot
-png(filename = "Predictions_SA2_Survival_NbAFPride.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_Predictions_SA2_Survival_NbAFPride.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -1317,11 +1372,13 @@ png(filename = "Predictions_SA2_Survival_NbAFPride.png",
     type = "cairo")
 
 ggplot(os.nb.af.estimates, aes(x = nb.af.pride, y = pred, colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
-  scale_x_continuous(breaks = unique(os.nb.af.estimates$nb.af.pride),
-                     labels = seq(1, 12)) +
+  geom_point(aes(x = os.nb.af.observed$nb.af.pride, y = os.nb.af.observed$surv,
+                 colour = os.nb.af.observed$season), alpha = 0.5, size = 1.2, shape = 16) +
+  scale_x_continuous(breaks = unique(os.nb.af.estimates$nb.af.pride)[seq(2, 12, 2)],
+                     labels = seq(2, 12, 2)) +
   scale_color_manual(name = "Season",
                      labels = c("Wet", "Dry"),
                      values = c(cbbPalette[4], cbbPalette[2])) +
@@ -1386,7 +1443,7 @@ png(filename = "Predictions_SA2_Survival_NbNMCoalHR.png",
 ggplot(os.nb.nm.coal.estimates, aes(x = nb.nm.coal.hr, y = pred, colour = season)) +
   facet_wrap(~ sex, labeller = labeller(sex = c("female" = "Female",
                                                 "male" = "Male"))) + 
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(os.nb.nm.coal.estimates$nb.nm.coal.hr),
@@ -1419,8 +1476,8 @@ dev.off()
 # ---------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.af = lions_output_GLMM[, grep("s.af.", 
-                                             colnames(lions_output_GLMM))]
+lions_output_s.af = lions_output_multistate[, grep("s.af.", 
+                                             colnames(lions_output_multistate))]
 lions_output_s.af.epsilons = lions_output_s.af[, grep("epsilon", 
                                                       colnames(lions_output_s.af))]
 
@@ -1465,7 +1522,7 @@ lions_output_s.af_estimates$parameter_plot = rep(c("Mean survival",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_s.af_estimates$parameter_plot))),
@@ -1526,6 +1583,12 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
 png(filename = "AF_Survival.png", 
@@ -1538,8 +1601,8 @@ png(filename = "AF_Survival.png",
 
 afsurv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -1559,10 +1622,10 @@ afsurv_plot = ggplot() +
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
                      labels = c("Yes", "No"),
-                     values = c(1, 0.4)) +
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-7.3, 3)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-7.3, 3)) +
   theme_general() +
   ggtitle("Adult-female survival") +
   theme(axis.line.y = element_blank(),
@@ -1587,17 +1650,17 @@ af.survival.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.af", 
-                                         colnames(lions_output_GLMM))][, 1]
+    mean.surv = lions_output_multistate[, grep("mu.s.af", 
+                                         colnames(lions_output_multistate))][, 1]
     
-    beta.age = lions_output_GLMM[, grep("s.af.beta.age", 
-                                        colnames(lions_output_GLMM))][, 1]
+    beta.age = lions_output_multistate[, grep("s.af.beta.age", 
+                                        colnames(lions_output_multistate))][, 1]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.af.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 1]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.af.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 1]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.af.beta.nb.nm", 
-                                                  colnames(lions_output_GLMM))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.af.beta.nb.nm", 
+                                                  colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.af.epsilons[, seq(1, 59, 2)], 1, median)
@@ -1605,15 +1668,15 @@ af.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.af.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.af.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -1621,17 +1684,17 @@ af.survival.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.af", 
-                                         colnames(lions_output_GLMM))][, 2]
+    mean.surv = lions_output_multistate[, grep("mu.s.af", 
+                                         colnames(lions_output_multistate))][, 2]
     
-    beta.age = lions_output_GLMM[, grep("s.af.beta.age", 
-                                        colnames(lions_output_GLMM))][, 2]
+    beta.age = lions_output_multistate[, grep("s.af.beta.age", 
+                                        colnames(lions_output_multistate))][, 2]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.af.beta.nb.af", 
-                                                colnames(lions_output_GLMM))][, 2]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.af.beta.nb.af", 
+                                                colnames(lions_output_multistate))][, 2]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.af.beta.nb.nm", 
-                                                  colnames(lions_output_GLMM))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.af.beta.nb.nm", 
+                                                  colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.af.epsilons[, seq(2, 60, 2)], 1, median)
@@ -1646,8 +1709,8 @@ af.survival.estimate = function(season = "wet",
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.af.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.af.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -1753,7 +1816,7 @@ png(filename = "Predictions_AF_Survival_Age.png",
     type = "cairo")
 
 ggplot(af.age.estimates, aes(x = age, y = pred, colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(af.age.estimates$age),
@@ -1817,7 +1880,7 @@ png(filename = "Predictions_AF_Survival_NbAFPride.png",
     type = "cairo")
 
 ggplot(af.nb.af.estimates, aes(x = nb.af.pride, y = pred, colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(af.nb.af.estimates$nb.af.pride),
@@ -1882,7 +1945,7 @@ png(filename = "Predictions_AF_Survival_NbNMCoalHR.png",
 
 ggplot(af.nb.nm.coal.estimates, aes(x = nb.nm.coal.hr, y = pred, 
                                     colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(af.nb.nm.coal.estimates$nb.nm.coal.hr),
@@ -1915,8 +1978,8 @@ dev.off()
 # -------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.ym = lions_output_GLMM[, grep("s.ym.", 
-                                             colnames(lions_output_GLMM))]
+lions_output_s.ym = lions_output_multistate[, grep("s.ym.", 
+                                             colnames(lions_output_multistate))]
 lions_output_s.ym.epsilons = lions_output_s.ym[, grep("epsilon", 
                                                       colnames(lions_output_s.ym))]
 lions_output_s.ym = lions_output_s.ym[, - grep("epsilon", 
@@ -1957,7 +2020,7 @@ lions_output_s.ym_estimates$parameter_plot = rep(c("Mean survival",
                                                  each = 2)
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples 
+n = nrow(lions_output_multistate) # Number of samples 
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_s.ym_estimates$parameter_plot))),
@@ -2016,8 +2079,14 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 # Plot effect size
-png(filename = "YM_Survival.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_YM_Survival.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -2027,8 +2096,8 @@ png(filename = "YM_Survival.png",
 
 ymsurv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -2046,12 +2115,12 @@ ymsurv_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
-  scale_alpha_manual(name = "Overlapping zero",
+  scale_alpha_manual(name = "Overlapping 0",
                      labels = c("Yes", "No"),
-                     values = c(1, 0.4)) +
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-3.9, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-20, 10, 2), limits = c(-7, 10)) +
   theme_general() +
   ggtitle("Young-male survival") +
   theme(axis.line.y = element_blank(),
@@ -2075,13 +2144,13 @@ ym.survival.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.ym", colnames(lions_output_GLMM))][, 1]
+    mean.surv = lions_output_multistate[, grep("mu.s.ym", colnames(lions_output_multistate))][, 1]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.ym.beta.nb.af.pride", 
-                                                colnames(lions_output_GLMM))][, 1]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.ym.beta.nb.af.pride", 
+                                                colnames(lions_output_multistate))][, 1]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.ym.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.ym.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.ym.epsilons[, seq(1, 59, 2)], 1, median)
@@ -2089,15 +2158,15 @@ ym.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.ym.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.ym.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -2105,13 +2174,13 @@ ym.survival.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.ym", colnames(lions_output_GLMM))][, 2]
+    mean.surv = lions_output_multistate[, grep("mu.s.ym", colnames(lions_output_multistate))][, 2]
     
-    beta.nb.af.pride = lions_output_GLMM[, grep("s.ym.beta.nb.af.pride", 
-                                                colnames(lions_output_GLMM))][, 2]
+    beta.nb.af.pride = lions_output_multistate[, grep("s.ym.beta.nb.af.pride", 
+                                                colnames(lions_output_multistate))][, 2]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.ym.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.ym.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.ym.epsilons[, seq(2, 60, 2)], 1, median)
@@ -2126,8 +2195,8 @@ ym.survival.estimate = function(season = "wet",
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.ym.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.ym.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -2235,7 +2304,7 @@ png(filename = "Predictions_YM_Survival_NbAFPride.png",
     type = "cairo")
 
 ggplot(ym.nb.af.estimates, aes(x = nb.af.pride, y = pred, colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(ym.nb.af.estimates$nb.af.pride),
@@ -2300,7 +2369,7 @@ png(filename = "Predictions_YM_Survival_NbNMCoalHR.png",
 
 ggplot(ym.nb.nm.coal.estimates, aes(x = nb.nm.coal.hr, y = pred, 
                                     colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(ym.nb.nm.coal.estimates$nb.nm.coal.hr),
@@ -2332,8 +2401,8 @@ dev.off()
 # ---------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.nm = lions_output_GLMM[, grep("s.nm.", 
-                                             colnames(lions_output_GLMM))]
+lions_output_s.nm = lions_output_multistate[, grep("s.nm.", 
+                                             colnames(lions_output_multistate))]
 lions_output_s.nm.epsilons = lions_output_s.nm[, grep("epsilon", 
                                                       colnames(lions_output_s.nm))]
 lions_output_s.nm = lions_output_s.nm[, - grep("epsilon", 
@@ -2371,7 +2440,7 @@ lions_output_s.nm_estimates$parameter_plot = rep(c("Mean survival",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_s.nm_estimates$parameter_plot))),
@@ -2424,9 +2493,17 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
+
+
 
 # Plot effect size
-png(filename = "NM_Survival.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_NM_Survival.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -2436,8 +2513,8 @@ png(filename = "NM_Survival.png",
 
 nmsurv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -2456,11 +2533,11 @@ nmsurv_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-5.3, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-20, 10, 2), limits = c(-7, 10)) +
   theme_general() +
   ggtitle("Nomadic-male survival") +
   theme(axis.line.y = element_blank(),
@@ -2483,11 +2560,11 @@ nm.survival.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.nm", 
-                                         colnames(lions_output_GLMM))][, 1]
+    mean.surv = lions_output_multistate[, grep("mu.s.nm", 
+                                         colnames(lions_output_multistate))][, 1]
     
-    beta.coal.size = lions_output_GLMM[, grep("s.nm.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 1]
+    beta.coal.size = lions_output_multistate[, grep("s.nm.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.nm.epsilons[, seq(1, 59, 2)], 1, median)
@@ -2495,15 +2572,15 @@ nm.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.nm.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.nm.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -2511,11 +2588,11 @@ nm.survival.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.nm", 
-                                         colnames(lions_output_GLMM))][, 2]
+    mean.surv = lions_output_multistate[, grep("mu.s.nm", 
+                                         colnames(lions_output_multistate))][, 2]
     
-    beta.coal.size = lions_output_GLMM[, grep("s.nm.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 2]
+    beta.coal.size = lions_output_multistate[, grep("s.nm.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.nm.epsilons[, seq(2, 60, 2)], 1, median)
@@ -2523,22 +2600,21 @@ nm.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.nm.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.nm.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
-    
-    # Calculate vital-rate prediction
-    pred =  mean.surv + beta.coal.size * coal.size + beta.habitat + median.epsilons
-    
   }
+  
+  # Calculate vital-rate prediction
+  pred =  mean.surv + beta.coal.size * coal.size + beta.habitat + median.epsilons
   
   return(pred)
   
@@ -2640,7 +2716,7 @@ png(filename = "Predictions_NM_Survival_CoalSize.png",
 
 ggplot(nm.coal.size.estimates, aes(x = coal.size, y = pred, 
                                    colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(nm.coal.size.estimates$coal.size),
@@ -2673,8 +2749,8 @@ dev.off()
 # ----------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_s.rm = lions_output_GLMM[, grep("s.rm.", 
-                                             colnames(lions_output_GLMM))]
+lions_output_s.rm = lions_output_multistate[, grep("s.rm.", 
+                                             colnames(lions_output_multistate))]
 lions_output_s.rm.epsilons = lions_output_s.rm[, grep("epsilon", 
                                                       colnames(lions_output_s.rm))]
 lions_output_s.rm = lions_output_s.rm[, - grep("epsilon", 
@@ -2716,7 +2792,7 @@ lions_output_s.rm_estimates$parameter_plot = rep(c("Mean survival",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_s.rm_estimates$parameter_plot))),
@@ -2772,9 +2848,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Prediction plot
-png(filename = "RM_Survival.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_RM_Survival.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -2784,14 +2866,14 @@ png(filename = "RM_Survival.png",
 
 rmsurv_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot 
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
                      color = season, alpha = overlapping0), 
                  position = position_dodge(width = 0.7), 
-                 linewidth = 1, linetype = "solid", show.legend = F) +
+                 size = 1, linetype = "solid", show.legend = F) +
   geom_point(data = df.plot, aes(x = median, y = variable, # Median
                                  color = season, alpha = overlapping0), 
              position = position_dodge(width = 0.7), size = 2) +
@@ -2804,8 +2886,8 @@ rmsurv_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
   scale_x_continuous(name = "", breaks = seq(-10, 8, 1), limits = c(-2, 4.3)) +
@@ -2832,14 +2914,14 @@ rm.survival.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.rm", 
-                                    colnames(lions_output_GLMM))][, 1]
+    mean.surv = lions_output_multistate[, grep("mu.s.rm", 
+                                    colnames(lions_output_multistate))][, 1]
     
-    beta.coal.size = lions_output_GLMM[, grep("s.rm.beta.coal.size", 
-                                         colnames(lions_output_GLMM))][, 1]
+    beta.coal.size = lions_output_multistate[, grep("s.rm.beta.coal.size", 
+                                         colnames(lions_output_multistate))][, 1]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.rm.beta.nb.nm.coal.hr", 
-                                             colnames(lions_output_GLMM))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.rm.beta.nb.nm.coal.hr", 
+                                             colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_s.rm.epsilons[, seq(1, 59, 2)], 1, median)
@@ -2847,15 +2929,15 @@ rm.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.rm.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("s.rm.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -2863,14 +2945,14 @@ rm.survival.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.surv = lions_output_GLMM[, grep("mu.s.rm", 
-                                         colnames(lions_output_GLMM))][, 2]
+    mean.surv = lions_output_multistate[, grep("mu.s.rm", 
+                                         colnames(lions_output_multistate))][, 2]
     
-    beta.coal.size = lions_output_GLMM[, grep("s.rm.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 2]
+    beta.coal.size = lions_output_multistate[, grep("s.rm.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 2]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("s.rm.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("s.rm.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_s.rm.epsilons[, seq(2, 60, 2)], 1, median)
@@ -2878,23 +2960,23 @@ rm.survival.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("s.rm.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("s.rm.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
-    
-    # Calculate vital-rate prediction
-    pred =  mean.surv + beta.coal.size * coal.size + 
-            beta.nb.nm.coal.hr * coal.size + beta.habitat + median.epsilons
-    
+  
   }
+  
+  # Calculate vital-rate prediction
+  pred =  mean.surv + beta.coal.size * coal.size + 
+    beta.nb.nm.coal.hr * coal.size + beta.habitat + median.epsilons
   
   return(pred)
   
@@ -2964,8 +3046,7 @@ dev.off()
 
 # Empty prediction dataframe
 rm.coal.size.estimates = expand.grid(season = c("wet", "dry"),
-                                          coal.size = (seq(1, 4) - mean(coal.size.unscaled, na.rm = T)) / (2 * sd(coal.size.unscaled, na.rm = T)),
-                                          pred = NA)
+                                          coal.size = (seq(1, 4) - mean(coal.size.unscaled, na.rm = T)) / (2 * sd(coal.size.unscaled, na.rm = T)))
 
 # Fill in prediction and credible intervals
 rm.coal.size.estimates$pred = plogis(apply(apply(rm.coal.size.estimates, 
@@ -2985,8 +3066,25 @@ rm.coal.size.estimates$upr = plogis(apply(apply(rm.coal.size.estimates,
                                           2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Empty observations dataframe
+rm.coal.size.observed = expand.grid(season = c("wet", "dry"),
+                                    habitat = "grassland",
+                                    coal.size.unscaled = seq(1, 4))
+
+# Fill in observations
+rm.coal.size.observed$surv = apply(rm.coal.size.observed, 1, 
+                                           FUN = function(x){
+                                             mean(lions.demo.data$survival[which(lions.demo.data$stage == "RM" &
+                                                                                   lions.demo.data$season == x[1] &
+                                                                                         lions.demo.data$habitat == x[2] &
+                                                                                         lions.demo.data$coal_size == as.numeric(x[3]))], na.rm = T)
+                                                  
+                                                }) 
+rm.coal.size.observed$coal.size = (rm.coal.size.observed$coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / (2 * sd(coal.size.unscaled, na.rm = T))
+
+
 # Prediction plot
-png(filename = "Predictions_RM_Survival_CoalSize.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_Predictions_RM_Survival_CoalSize.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -2996,9 +3094,11 @@ png(filename = "Predictions_RM_Survival_CoalSize.png",
 
 ggplot(rm.coal.size.estimates, aes(x = coal.size, y = pred, 
                                    colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
+  geom_point(aes(x = rm.coal.size.observed$coal.size, y = rm.coal.size.observed$surv,
+                 colour = rm.coal.size.observed$season), alpha = 0.5, size = 1.2, shape = 16) +
   scale_x_continuous(breaks = unique(rm.coal.size.estimates$coal.size),
                      labels = seq(1, 4)) +
   scale_color_manual(name = "Season",
@@ -3061,7 +3161,7 @@ png(filename = "Predictions_RM_Survival_NbNMCoalHR.png",
 
 ggplot(rm.nb.nm.coal.estimates, aes(x = nb.nm.coal.hr, y = pred, 
                                     colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(rm.nb.nm.coal.estimates$nb.nm.coal.hr),
@@ -3094,8 +3194,8 @@ dev.off()
 # ---------------------------
 
 # Subset model output data and remove epsilons and sigma
-lions_output_emig.ym = lions_output_GLMM[, grep("emig.ym", 
-                                                colnames(lions_output_GLMM))]
+lions_output_emig.ym = lions_output_multistate[, grep("emig.ym", 
+                                                colnames(lions_output_multistate))]
 lions_output_emig.ym.epsilons = lions_output_emig.ym[, grep("epsilon", 
                                                             colnames(lions_output_emig.ym))]
 lions_output_emig.ym = lions_output_emig.ym[, - grep("epsilon", 
@@ -3129,7 +3229,7 @@ lions_output_emig.ym_estimates$parameter_plot = rep(c("Habitat (grassland)", "Ha
 
 
 # Get posterior distribution for density plots
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_emig.ym_estimates$parameter_plot))),
@@ -3182,9 +3282,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Prediction plot
-png(filename = "YM_Emigration.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_YM_Emigration.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -3194,8 +3300,8 @@ png(filename = "YM_Emigration.png",
 
 ymemig_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -3214,11 +3320,11 @@ ymemig_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-4.3, 1.7)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-4.7, 1.8)) +
   theme_general() +
   ggtitle("Young-male emigration") +
   theme(axis.line.y = element_blank(),
@@ -3240,8 +3346,8 @@ ym.emig.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.emig = lions_output_GLMM[, grep("mu.emig.ym", 
-                                         colnames(lions_output_GLMM))][, 1]
+    mean.emig = lions_output_multistate[, grep("mu.emig.ym", 
+                                         colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_emig.ym.epsilons[, seq(1, 59, 2)], 1, median)
@@ -3249,15 +3355,15 @@ ym.emig.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("emig.ym.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("emig.ym.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -3265,8 +3371,8 @@ ym.emig.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.emig = lions_output_GLMM[, grep("mu.emig.ym", 
-                                         colnames(lions_output_GLMM))][, 2]
+    mean.emig = lions_output_multistate[, grep("mu.emig.ym", 
+                                         colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_emig.ym.epsilons[, seq(2, 60, 2)], 1, median)
@@ -3274,15 +3380,15 @@ ym.emig.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("emig.ym.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("emig.ym.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -3357,8 +3463,8 @@ dev.off()
 # ------------------------------------------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_t.ym.nm = lions_output_GLMM[, grep("t.ym.nm.", 
-                                                colnames(lions_output_GLMM))]
+lions_output_t.ym.nm = lions_output_multistate[, grep("t.ym.nm.", 
+                                                colnames(lions_output_multistate))]
 lions_output_t.ym.nm.epsilons = lions_output_t.ym.nm[, grep("epsilon", 
                                                             colnames(lions_output_t.ym.nm))]
 lions_output_t.ym.nm = lions_output_t.ym.nm[, - grep("epsilon", 
@@ -3389,7 +3495,7 @@ lions_output_t.ym.nm_estimates$parameter_plot = rep(c("Mean transition\nprobabil
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_t.ym.nm_estimates$parameter_plot))),
@@ -3432,9 +3538,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "YM_TransitionToNM.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_YM_TransitionToNM.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -3444,16 +3556,16 @@ png(filename = "YM_TransitionToNM.png",
 
 ymtrans_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
-                     color = season),
+                     color = season, alpha = overlapping0),
                  position = position_dodge(width = 0.7), 
                  size = 1, linetype = "solid", show.legend = F) +
   geom_point(data = df.plot, # Median
-             aes(x = median, y = variable, color = season), 
+             aes(x = median, y = variable, color = season, alpha = overlapping0), 
              position = position_dodge(width = 0.7), size = 2) +
   geom_vline(xintercept = 0, linetype = "dashed", # 0-line
              color = colPlot, size = 0.4) +
@@ -3463,9 +3575,12 @@ ymtrans_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
+  scale_alpha_manual(name = "Overlapping 0",
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-2.5, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-3, 10)) +
   theme_general() +
   ggtitle("Young-male transition to nomadic male (once emigrated)") +
   theme(axis.line.y = element_blank(),
@@ -3486,8 +3601,8 @@ ym.trans.estimate = function(season = "wet"){
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.trans = lions_output_GLMM[, grep("mu.t.ym.nm", 
-                                        colnames(lions_output_GLMM))][, 1]
+    mean.trans = lions_output_multistate[, grep("mu.t.ym.nm", 
+                                        colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_t.ym.nm.epsilons[, seq(1, 59, 2)], 1, median)
@@ -3497,8 +3612,8 @@ ym.trans.estimate = function(season = "wet"){
   else{
     
     # Get dry-season parameter values
-    mean.trans = lions_output_GLMM[, grep("mu.t.ym.nm", 
-                                          colnames(lions_output_GLMM))][, 2]
+    mean.trans = lions_output_multistate[, grep("mu.t.ym.nm", 
+                                          colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons.dry = apply(lions_output_t.ym.nm.epsilons[, seq(2, 60, 2)], 1, median)
@@ -3570,8 +3685,8 @@ dev.off()
 # ----------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_takeover = lions_output_GLMM[, grep("takeover.", 
-                                                 colnames(lions_output_GLMM))]
+lions_output_takeover = lions_output_multistate[, grep("takeover.", 
+                                                 colnames(lions_output_multistate))]
 lions_output_takeover.epsilons = lions_output_takeover[, grep("epsilon",
                                                               colnames(lions_output_takeover))]
 lions_output_takeover = lions_output_takeover[, - grep("epsilon", 
@@ -3610,7 +3725,7 @@ lions_output_takeover_estimates$parameter_plot = rep(c("Mean takeover\nprobabili
 
 
 # Get posterior distribution for density
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_takeover_estimates$parameter_plot))),
@@ -3666,9 +3781,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "NM_Takeover.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_NM_Takeover.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -3678,8 +3799,8 @@ png(filename = "NM_Takeover.png",
 
 nmtakeover_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -3698,11 +3819,11 @@ nmtakeover_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-3.7, 4)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-3.7, 4)) +
   theme_general() +
   ggtitle("Nomadic-male takeover") +
   theme(axis.line.y = element_blank(),
@@ -3725,11 +3846,11 @@ nm.takeover.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.takeover = lions_output_GLMM[, grep("mu.takeover", 
-                                             colnames(lions_output_GLMM))][, 1]
+    mean.takeover = lions_output_multistate[, grep("mu.takeover", 
+                                             colnames(lions_output_multistate))][, 1]
     
-    beta.coal.size = lions_output_GLMM[, grep("takeover.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 1]
+    beta.coal.size = lions_output_multistate[, grep("takeover.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_takeover.epsilons[, seq(1, 59, 2)], 1, median)
@@ -3737,15 +3858,15 @@ nm.takeover.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat.wet = rep(0, nrow(lions_output_GLMM))
+      beta.habitat.wet = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("takeover.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("takeover.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -3753,11 +3874,11 @@ nm.takeover.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.takeover = lions_output_GLMM[, grep("mu.takeover", 
-                                             colnames(lions_output_GLMM))][, 2]
+    mean.takeover = lions_output_multistate[, grep("mu.takeover", 
+                                             colnames(lions_output_multistate))][, 2]
     
-    beta.coal.size = lions_output_GLMM[, grep("takeover.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 2]
+    beta.coal.size = lions_output_multistate[, grep("takeover.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 2]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_takeover.epsilons[, seq(2, 60, 2)], 1, median)
@@ -3765,15 +3886,15 @@ nm.takeover.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("takeover.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("takeover.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -3871,8 +3992,25 @@ nm.takeover.coal.size.estimates$upr = plogis(apply(apply(nm.takeover.coal.size.e
                                                    2, FUN = function(x) quantile(x, probs = 0.95)))
 
 
+# Empty observations dataframe
+nm.coal.size.observed = expand.grid(season = c("wet", "dry"),
+                                    habitat = "grassland",
+                                    coal.size.unscaled = seq(1, 4))
+
+# Fill in observations
+nm.coal.size.observed$takeover = apply(nm.coal.size.observed, 1, 
+                                           FUN = function(x){
+                                             mean(lions.demo.data$survival[which(lions.demo.data$stage == "NM" &
+                                                                                   lions.demo.data$season == x[1] &
+                                                                                   lions.demo.data$habitat == x[2] &
+                                                                                   lions.demo.data$coal_size == as.numeric(x[3]))], na.rm = T)
+                                             
+                                           }) 
+nm.coal.size.observed$coal.size = (nm.coal.size.observed$coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / (2 * sd(coal.size.unscaled, na.rm = T))
+
+
 # Prediction plot
-png(filename = "Predictions_NM_Takeover_CoalSize.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_Predictions_NM_Takeover_CoalSize.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -3882,9 +4020,11 @@ png(filename = "Predictions_NM_Takeover_CoalSize.png",
 
 ggplot(nm.takeover.coal.size.estimates, aes(x = coal.size, y = pred, 
                                             colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
+  geom_point(aes(x = nm.coal.size.observed$coal.size, y = nm.coal.size.observed$takeover,
+                 colour = nm.coal.size.observed$season), alpha = 0.5, size = 1.2, shape = 16) +
   scale_x_continuous(breaks = unique(nm.takeover.coal.size.estimates$coal.size),
                      labels = seq(1, 4)) +
   scale_color_manual(name = "Season",
@@ -3915,8 +4055,8 @@ dev.off()
 # -----------------------------
 
 # Subset model output data and remove epsilons
-lions_output_eviction = lions_output_GLMM[, grep("eviction",
-                                                 colnames(lions_output_GLMM))]
+lions_output_eviction = lions_output_multistate[, grep("eviction",
+                                                 colnames(lions_output_multistate))]
 lions_output_eviction.epsilons = lions_output_eviction[, grep("epsilon", 
                                                               colnames(lions_output_eviction))]
 lions_output_eviction = lions_output_eviction[, - grep("epsilon", 
@@ -3960,7 +4100,7 @@ lions_output_eviction_estimates$parameter_plot = rep(c("Coalition size",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_eviction_estimates$parameter_plot))),
@@ -4019,9 +4159,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "RM_Eviction.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_RM_Eviction.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -4031,8 +4177,8 @@ png(filename = "RM_Eviction.png",
 
 rmeviction_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plots
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3,
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1,
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals 
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -4051,11 +4197,11 @@ rmeviction_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-10, 5.6)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-10, 6)) +
   theme_general() +
   ggtitle("Resident-male eviction") +
   theme(axis.line.y = element_blank(),
@@ -4079,14 +4225,14 @@ rm.eviction.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.eviction = lions_output_GLMM[, grep("mu.eviction", 
-                                             colnames(lions_output_GLMM))][, 1]
+    mean.eviction = lions_output_multistate[, grep("mu.eviction", 
+                                             colnames(lions_output_multistate))][, 1]
     
-    beta.coal.size = lions_output_GLMM[, grep("eviction.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 1]
+    beta.coal.size = lions_output_multistate[, grep("eviction.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 1]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("eviction.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 1]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("eviction.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_eviction.epsilons[, seq(1, 59, 2)], 1, median)
@@ -4094,15 +4240,15 @@ rm.eviction.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("eviction.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("eviction.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -4110,14 +4256,14 @@ rm.eviction.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.eviction = lions_output_GLMM[, grep("mu.eviction", 
-                                             colnames(lions_output_GLMM))][, 2]
+    mean.eviction = lions_output_multistate[, grep("mu.eviction", 
+                                             colnames(lions_output_multistate))][, 2]
     
-    beta.coal.size = lions_output_GLMM[, grep("eviction.beta.coal.size", 
-                                              colnames(lions_output_GLMM))][, 2]
+    beta.coal.size = lions_output_multistate[, grep("eviction.beta.coal.size", 
+                                              colnames(lions_output_multistate))][, 2]
     
-    beta.nb.nm.coal.hr = lions_output_GLMM[, grep("eviction.beta.nb.nm.coal.hr", 
-                                                  colnames(lions_output_GLMM))][, 2]
+    beta.nb.nm.coal.hr = lions_output_multistate[, grep("eviction.beta.nb.nm.coal.hr", 
+                                                  colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_eviction.epsilons[, seq(2, 60, 2)], 1, median)
@@ -4125,15 +4271,15 @@ rm.eviction.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("eviction.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("eviction.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -4241,7 +4387,7 @@ png(filename = "Predictions_RM_Eviction_CoalSize.png",
 
 ggplot(rm.eviction.coal.size.estimates, aes(x = coal.size, y = pred, 
                                             colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(rm.eviction.coal.size.estimates$coal.size),
@@ -4305,7 +4451,7 @@ png(filename = "Predictions_RM_Eviction_NbNMCoalHR.png",
 
 ggplot(rm.eviction.nb.nm.coal.estimates, aes(x = nm.nm.coal.hr, y = pred,
                                              colour = season)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lwr, ymax = upr, colour = season, fill = season), 
               alpha = 0.2) +
   scale_x_continuous(breaks = unique(rm.eviction.nb.nm.coal.estimates$nm.nm.coal.hr),
@@ -4332,8 +4478,8 @@ dev.off()
 # ----------------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_dp.pride = lions_output_GLMM[, grep("dp.pride", 
-                                                 colnames(lions_output_GLMM))]
+lions_output_dp.pride = lions_output_multistate[, grep("dp.pride", 
+                                                 colnames(lions_output_multistate))]
 lions_output_dp.pride.epsilons = lions_output_dp.pride[, grep("epsilon", 
                                                               colnames(lions_output_dp.pride))]
 lions_output_dp.pride = lions_output_dp.pride[, - grep("epsilon",
@@ -4371,7 +4517,7 @@ lions_output_dp.pride_estimates$parameter_plot = rep(c("Habitat (grassland)",
 
 
 # Get posterior distribution for density plots
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_dp.pride_estimates$parameter_plot))),
@@ -4424,9 +4570,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "DP_Pride.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_DP_Pride.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -4436,8 +4588,8 @@ png(filename = "DP_Pride.png",
 
 dppride_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -4456,11 +4608,11 @@ dppride_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-3.5, 5.4)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-4.2, 6)) +
   theme_general() +
   ggtitle("Pride detection probability") +
   theme(axis.line.y = element_blank(),
@@ -4482,8 +4634,8 @@ dp.pride.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.pride", 
-                                       colnames(lions_output_GLMM))][, 1]
+    mean.dp = lions_output_multistate[, grep("mu.dp.pride", 
+                                       colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_dp.pride.epsilons[, seq(1, 59, 2)], 1, median)
@@ -4491,15 +4643,15 @@ dp.pride.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("dp.pride.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("dp.pride.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -4507,8 +4659,8 @@ dp.pride.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.pride", 
-                                       colnames(lions_output_GLMM))][, 2]
+    mean.dp = lions_output_multistate[, grep("mu.dp.pride", 
+                                       colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_dp.pride.epsilons[, seq(2, 60, 2)], 1, median)
@@ -4516,15 +4668,15 @@ dp.pride.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("dp.pride.beta.habitat.woodland", 
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("dp.pride.beta.habitat.woodland", 
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -4599,8 +4751,8 @@ dev.off()
 # ----------------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_dp.nm = lions_output_GLMM[, grep("dp.nm", 
-                                              colnames(lions_output_GLMM))]
+lions_output_dp.nm = lions_output_multistate[, grep("dp.nm", 
+                                              colnames(lions_output_multistate))]
 lions_output_dp.nm.epsilons = lions_output_dp.nm[, grep("epsilon", 
                                                         colnames(lions_output_dp.nm))]
 
@@ -4639,7 +4791,7 @@ lions_output_dp.nm_estimates$parameter_plot = rep(c("Habitat (grassland)",
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n), 
                                             length(unique(lions_output_dp.nm_estimates$parameter_plot))),
@@ -4692,9 +4844,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effe size
-png(filename = "DP_NM.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_DP_NM.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -4704,8 +4862,8 @@ png(filename = "DP_NM.png",
 
 dpnm_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season),
-                       color = NA, size = 1, alpha = 0.3,
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0),
+                       color = NA, size = 1,
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
@@ -4724,11 +4882,11 @@ dpnm_plot = ggplot() +
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
   scale_alpha_manual(name = "Overlapping 0",
-                     labels = c("No", "Yes"),
-                     values = c(0.4, 1)) +
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-9.3, 10)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-5.8, 10)) +
   theme_general() +
   ggtitle("Nomadic male detection probability") +
   theme(axis.line.y = element_blank(),
@@ -4750,8 +4908,8 @@ dp.nm.estimate = function(season = "wet",
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.nm", 
-                                       colnames(lions_output_GLMM))][, 1]
+    mean.dp = lions_output_multistate[, grep("mu.dp.nm", 
+                                       colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_dp.nm.epsilons[, seq(1, 59, 2)], 1, median)
@@ -4759,15 +4917,15 @@ dp.nm.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get wet-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("dp.nm.beta.habitat.woodland",
-                                              colnames(lions_output_GLMM))][, 3]
+      beta.habitat = lions_output_multistate[, grep("dp.nm.beta.habitat.woodland",
+                                              colnames(lions_output_multistate))][, 3]
       
     }
   }
@@ -4775,8 +4933,8 @@ dp.nm.estimate = function(season = "wet",
   else{
     
     # Get dry-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.nm", 
-                                       colnames(lions_output_GLMM))][, 2]
+    mean.dp = lions_output_multistate[, grep("mu.dp.nm", 
+                                       colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons = apply(lions_output_dp.nm.epsilons[, seq(2, 60, 2)], 1, median)
@@ -4784,15 +4942,15 @@ dp.nm.estimate = function(season = "wet",
     if(habitat == "grassland"){
       
       # The plain habitat is the reference habitat, the habitat parameter value is thus 0
-      beta.habitat = rep(0, nrow(lions_output_GLMM))
+      beta.habitat = rep(0, nrow(lions_output_multistate))
       
     }
     
     else{
       
       # Get dry-season woodland habitat parameter value
-      beta.habitat = lions_output_GLMM[, grep("dp.nm.beta.habitat.woodland",
-                                              colnames(lions_output_GLMM))][, 4]
+      beta.habitat = lions_output_multistate[, grep("dp.nm.beta.habitat.woodland",
+                                              colnames(lions_output_multistate))][, 4]
       
     }
   }
@@ -4867,8 +5025,8 @@ dev.off()
 # ---------------------------------
 
 # Subset model output data and remove epsilons and sigmas
-lions_output_dp.dead = lions_output_GLMM[, grep("dp.dead",
-                                                colnames(lions_output_GLMM))]
+lions_output_dp.dead = lions_output_multistate[, grep("dp.dead",
+                                                colnames(lions_output_multistate))]
 lions_output_dp.dead.epsilons = lions_output_dp.dead[, grep("epsilon",
                                                             colnames(lions_output_dp.dead))]
 lions_output_dp.dead = lions_output_dp.dead[, - grep("epsilon", 
@@ -4900,7 +5058,7 @@ lions_output_dp.dead_estimates$parameter_plot = rep(c("Mean detection\nprobabili
 
 
 # Get posterior distribution for density plot
-n = nrow(lions_output_GLMM) # Number of samples
+n = nrow(lions_output_multistate) # Number of samples
 
 df.plot.posterior = data.frame(season = rep(rep(c("Wet", "Dry"), each = n),
                                             length(unique(lions_output_dp.dead_estimates$parameter_plot))),
@@ -4943,9 +5101,15 @@ for(i in 1:nrow(df.plot)){
   }
 }
 
+df.plot.posterior$overlapping0 = apply(df.plot.posterior, 1, 
+                                       FUN = function(x){
+                                         
+                                         df.plot$overlapping0[which(df.plot$variable == x[2] & df.plot$season == x[1])]
+                                       })
+
 
 # Plot effect size
-png(filename = "DP_Dead.png", 
+png(filename = "Output/Plots/Lions_MultistateModel_DP_Dead.png", 
     width = 12, 
     height = 10, 
     units = "cm", 
@@ -4955,15 +5119,15 @@ png(filename = "DP_Dead.png",
 
 dpdead_plot = ggplot() +
   ggdist::stat_halfeye(data = df.plot.posterior, # Density plot
-                       aes(x = posterior, y = variable, fill = season), 
-                       color = NA, size = 1, alpha = 0.3, 
+                       aes(x = posterior, y = variable, fill = season, alpha = overlapping0), 
+                       color = NA, size = 1, 
                        position = position_dodge(width = 0.7)) +
   geom_linerange(data = df.plot, # Credible intervals
                  aes(xmin = BCI90_lower, xmax = BCI90_upper, y = variable, 
-                     color = season), 
+                     color = season, alpha = overlapping0), 
                  position = position_dodge(width = 0.7), size = 1, linetype = "solid", show.legend = F) +
   geom_point(data = df.plot, # Median
-             aes(x = median, y = variable, color = season), 
+             aes(x = median, y = variable, color = season, alpha = overlapping0), 
              position = position_dodge(width = 0.7), size = 2) +
   geom_vline(xintercept = 0, linetype = "dashed", # 0-line
              color = colPlot, size = 0.4) +
@@ -4973,9 +5137,12 @@ dpdead_plot = ggplot() +
   scale_fill_manual(name = "Season",
                     labels = c("Wet", "Dry"),
                     values = c(cbbPalette[4], cbbPalette[2])) +
+  scale_alpha_manual(name = "Overlapping 0",
+                     labels = c("Yes", "No"),
+                     values = c(0.7, 0.15)) +
   xlab(NULL) +
   ylab(NULL) +
-  scale_x_continuous(name = "", breaks = seq(-10, 10, 1), limits = c(-3.9, 1)) +
+  scale_x_continuous(name = "", breaks = seq(-10, 10, 2), limits = c(-4, 1)) +
   theme_general() +
   ggtitle("Death recovery probability") +
   theme(axis.line.y = element_blank(),
@@ -4996,8 +5163,8 @@ dp.dead.estimate = function(season = "wet"){
   if(season == "wet"){
     
     # Get wet-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.dead", 
-                                       colnames(lions_output_GLMM))][, 1]
+    mean.dp = lions_output_multistate[, grep("mu.dp.dead", 
+                                       colnames(lions_output_multistate))][, 1]
     
     # Get wet-season epsilons
     median.epsilons = apply(lions_output_dp.dead.epsilons[, seq(1, 59, 2)], 1, median)
@@ -5007,8 +5174,8 @@ dp.dead.estimate = function(season = "wet"){
   else{
     
     # Get dry-season parameter values
-    mean.dp = lions_output_GLMM[, grep("mu.dp.dead", 
-                                       colnames(lions_output_GLMM))][, 2]
+    mean.dp = lions_output_multistate[, grep("mu.dp.dead", 
+                                       colnames(lions_output_multistate))][, 2]
     
     # Get dry-season epsilons
     median.epsilons= apply(lions_output_dp.dead.epsilons[, seq(2, 60, 2)], 1, median)
@@ -5044,7 +5211,7 @@ dp.dead.season.estimates$upr = plogis(apply(apply(dp.dead.season.estimates,
 
 
 # Prediction plot
-png(filename = "Predictions_DP_Dead_Season.png", 
+png(filename = "Output/Plots/Predictions_DP_Dead_Season.png", 
     width = 6, 
     height = 6, 
     units = "cm", 
@@ -5158,8 +5325,8 @@ for(p in 1:nrow(params.labels[1:13, ])){
   epsilon.colname = paste0("epsilon.", param[1]) # Get model output column name
   
   # Subset wet-season espilons
-  epsilons_wet = lions_output_GLMM[, grep(epsilon.colname, 
-                                          colnames(lions_output_GLMM))] 
+  epsilons_wet = lions_output_multistate[, grep(epsilon.colname, 
+                                          colnames(lions_output_multistate))] 
   epsilons_wet = epsilons_wet[, seq(1, 59, 2)]
   
   # Get mean epsilons and credible intervals
@@ -5174,7 +5341,7 @@ for(p in 1:nrow(params.labels[1:13, ])){
                                                               FUN = function(x) quantile(x, probs = 0.05))
   
   # Subset dry-season espilons
-  epsilons_dry = lions_output_GLMM[, grep(epsilon.colname, colnames(lions_output_GLMM))] 
+  epsilons_dry = lions_output_multistate[, grep(epsilon.colname, colnames(lions_output_multistate))] 
   epsilons_dry = epsilons_dry[, seq(2, 60, 2)]
   
   # Get mean epsilons and credible intervals
@@ -5226,7 +5393,7 @@ plot.epsilon.post =
         legend.title = element_text(colour = colPlot, size = 8, family = font),
         legend.key.size = unit(15, "pt"))
 
-png(filename = paste0("EpsilonPosteriorDistributions.png"), 
+png(filename = paste0("Output/Plots/EpsilonPosteriorDistributions.png"), 
     width = 16, 
     height = 17, 
     units = "cm", 

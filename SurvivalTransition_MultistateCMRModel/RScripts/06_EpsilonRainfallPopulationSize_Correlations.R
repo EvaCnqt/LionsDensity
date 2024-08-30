@@ -33,8 +33,8 @@ library(bayestestR)
 ## 1.3. Covariates ----
 # ----------------
 
-pop.size = read.csv("041_Covariate_PopulationSize.csv")$x
-rainfall = read.csv("042_Covariate_SeasonalPrecipitation.csv")
+pop.size = read.csv("Data/028_Covariate_PopulationSize.csv")$x
+rainfall = read.csv("Data/029_Covariate_SeasonalPrecipitation.csv")
 rainfall = rainfall$cumul.rain
 
 
@@ -46,7 +46,7 @@ rainfall = rainfall$cumul.rain
 #
 ###########################################################################
 
-lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv") 
+load("Output/Lions_MultistateModel_MCMCSamples.RData") 
 
 
 
@@ -65,7 +65,7 @@ cbbPalette = c("#000000", "#E69F00", "#56B4E9",
 colBG = "transparent" # Plot background color
 colPlot = "black"     # Plot color
 font = "Helvetica"    # Plot font
-fontSize = 10         # Plot font size
+fontSize = 6         # Plot font size
 
 # Define ggplot theme:
 theme_general = function(){ 
@@ -104,7 +104,7 @@ theme_general = function(){
 #
 ###########################################################################
 
-epsilons = lions_output[, grep("epsilon", colnames(lions_output))]
+epsilons = lions_output_multistate[, grep("epsilon", colnames(lions_output_multistate))]
 
 colnames(epsilons)
 
@@ -439,7 +439,7 @@ corr.epsilon.rainfall.pop.size$param = factor(corr.epsilon.rainfall.pop.size$par
 
 
 # Plot
-png(file = "EpsilonPopSizeCorr.png",
+png(file = "Output/Plots/Lions_Multistate_CorrelationEpsilon_PopSizeRainfall.png",
     type = "cairo",
     units = "cm",
     width = 23,

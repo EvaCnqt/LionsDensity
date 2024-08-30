@@ -31,8 +31,11 @@ library(coda)
 # ------------------
 
 # Individual capture histories
-lions.ch = read.csv("Data/01_LionsCaptureHistories.csv", row.names = 1)
+lions.ch = read.csv("Data/011_LionsCaptureHistories.csv", row.names = 1)
 lions.ch = as.matrix(lions.ch)
+
+# MCMC samples
+load("Output/Lions_MultistateModel_MCMCSamples.RData") 
 
 
 ## 1.4. Covariates ----
@@ -48,6 +51,10 @@ season = read.csv("Data/022_Covariate_Season.csv", stringsAsFactors = F)$x
 # Habitat
 habitat = read.csv("Data/023_Covariate_Habitat.csv", row.names = 1)
 habitat = as.matrix(habitat)
+habitat.intercept.estimate = coef(glm(c(habitat) ~ 1, "binomial"))
+habitat.prob = as.numeric(boot::inv.logit(habitat.intercept.estimate))
+habitat = habitat + 1
+
 
 
 # Density-dependent covariates
@@ -60,6 +67,9 @@ nb.af.pride.unscaled = as.matrix(nb.af.pride.unscaled)
 range(nb.af.pride.unscaled, na.rm = T)
 nb.af.pride = (nb.af.pride.unscaled - mean(nb.af.pride.unscaled, na.rm = T)) / 
   (2 * sd(nb.af.pride.unscaled, na.rm = T)) # Standardize covariate
+
+negbin.model = MASS::glm.nb(c(nb.af.pride.unscaled) ~ 1)
+nb.af.pride.theta = negbin.model$theta
 
 
 # Age
@@ -77,6 +87,9 @@ range(coal.size.unscaled, na.rm = T)
 coal.size = (coal.size.unscaled - mean(coal.size.unscaled, na.rm = T)) / 
   (2 * sd(coal.size.unscaled, na.rm = T)) # Standardize covariate
 
+poisson.model = glm(c(coal.size.unscaled) ~ 1, "quasipoisson")
+coal.size.lambda = exp(poisson.model$coefficients)
+
 
 # Number of nomadic coalitions in the home range of a pride or 
 # a resident male coalition
@@ -86,11 +99,14 @@ range(nb.nm.coal.hr.unscaled, na.rm = T)
 nb.nm.coal.hr = (nb.nm.coal.hr.unscaled - mean(nb.nm.coal.hr.unscaled, na.rm = T)) / 
   (2 * sd(nb.nm.coal.hr.unscaled, na.rm = T)) # Standardize covariate
 
+negbin.model = MASS::glm.nb(c(nb.nm.coal.hr.unscaled) ~ 1)
+nb.nm.coal.hr.theta = negbin.model$theta
+
 
 ## 1.5. Lions groups across time ----
 # ------------------------------
 
-lions.groups = read.csv("Data/03_LionsGroups.csv", row.names = 1)
+lions.groups = read.csv("Data/013_LionsGroups.csv", row.names = 1)
 
 
 
@@ -112,19 +128,8 @@ get_last  = function(x){
   
 }
 
-lions_first = apply(lions_ch, 1, get_first)
-lions_last = apply(lions_ch, 1, get_last)
-
-
-
-
-###########################################################################
-#
-# 3. Loading model output ----
-#
-###########################################################################
-
-lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv") 
+lions.first = apply(lions.ch, 1, get_first)
+lions.last = apply(lions.ch, 1, get_last)
 
 
 
@@ -139,8 +144,10 @@ lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
 # --------------------------------------
 
 # 500 samples from the posterior distribution for each parameter
-posterior_sampled = lions_output_GLMM[seq(1, nrow(lions_output_GLMM), 
+posterior_sampled = lions_output_multistate[seq(1, nrow(lions_output_multistate), 
                                           length.out = 500), ]
+
+rm(lions_output_multistate)
 
 
 ## 3.2. Simulating datasets ----
@@ -277,8 +284,8 @@ transition_function = function(# Initial values and datasets
     # We use truncated distributions to sample the missing values to stay
     # within the observed values.
     # Number of nomadic coalitions in the home range
-    nb.nm.coal.hr = ifelse(!is.na(nb.nm.coal.hr_matrix[groups[capture], capture]), 
-                           nb.nm.coal.hr_matrix[groups[capture], capture], 
+    nb.nm.coal.hr = ifelse(!is.na(nb.nm.coal.hr_matrix[as.character(groups[capture]), capture]), 
+                           nb.nm.coal.hr_matrix[as.character(groups[capture]), capture], 
                            (truncdist::rtrunc(1, "nbinom", 
                                               a = min.nb.nm.coal.hr, 
                                               b = max.nb.nm.coal.hr, 
@@ -287,8 +294,8 @@ transition_function = function(# Initial values and datasets
                             - mu.nb.nm.coal.hr) / (2 * sd.nb.nm.coal.hr))
     
     # Number of adult females in the pride
-    nb.af.pride = ifelse(!is.na(nb.af.pride_matrix[groups[capture], capture]), 
-                         nb.af.pride_matrix[groups[capture], capture], 
+    nb.af.pride = ifelse(!is.na(nb.af.pride_matrix[as.character(groups[capture]), capture]), 
+                         nb.af.pride_matrix[as.character(groups[capture]), capture], 
                          (truncdist::rtrunc(1, "nbinom", 
                                             a = min.nb.af.pride,
                                             b = max.nb.af.pride, 
@@ -305,8 +312,8 @@ transition_function = function(# Initial values and datasets
     age = age_vector[capture]
     
     # Coalition size
-    coal.size = ifelse(!is.na(coal.size_matrix[groups[capture], capture]), 
-                       coal.size_matrix[groups[capture], capture], 
+    coal.size = ifelse(!is.na(coal.size_matrix[as.character(groups[capture]), capture]), 
+                       coal.size_matrix[as.character(groups[capture]), capture], 
                        (truncdist::rtrunc(1, "pois",
                                           a = min.coal.size,
                                           b = max.coal.size, 
@@ -317,89 +324,89 @@ transition_function = function(# Initial values and datasets
     # Calculate vital-rate predictions
     
     # Young-subadult survival
-    survSA1 = as.numeric(plogis(mu.s.sa1[seasons[capture]] + 
-                                         s.sa1.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
-                                         s.sa1.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
-                                         s.sa1.beta.habitat.woodland[seasons[capture], habitat] +
-                                         epsilon.s.sa1[seasons[capture], years[capture]]))
+    survSA1 = as.numeric(plogis(as.numeric(mu.s.sa1[seasons[capture]] + 
+                                           s.sa1.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
+                                           s.sa1.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
+                                           s.sa1.beta.habitat.woodland[seasons[capture], habitat] +
+                                           epsilon.s.sa1[seasons[capture], years[capture]])))
     
     # Female old-subadult survival
-    survSA2F = as.numeric(plogis(mu.s.sa2f[seasons[capture]] + 
-                                          s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr +
-                                          s.sa2.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
-                                          s.sa2.beta.habitat.woodland[seasons[capture], habitat] +
-                                          epsilon.s.sa2[seasons[capture], years[capture]]))
+    survSA2F = as.numeric(plogis(as.numeric(mu.s.sa2f[seasons[capture]] + 
+                                            s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr +
+                                            s.sa2.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
+                                            s.sa2.beta.habitat.woodland[seasons[capture], habitat] +
+                                            epsilon.s.sa2[seasons[capture], years[capture]])))
                                   
     # Male old-subadult survival       
-    survSA2M = as.numeric(plogis(mu.s.sa2m[seasons[capture]] + 
-                                          s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr +
-                                          s.sa2.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
-                                          s.sa2.beta.habitat.woodland[seasons[capture], habitat] +
-                                          epsilon.s.sa2[seasons[capture], years[capture]]))
+    survSA2M = as.numeric(plogis(as.numeric(mu.s.sa2m[seasons[capture]] + 
+                                            s.sa2.beta.nb.nm.coal.hr * nb.nm.coal.hr +
+                                            s.sa2.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
+                                            s.sa2.beta.habitat.woodland[seasons[capture], habitat] +
+                                            epsilon.s.sa2[seasons[capture], years[capture]])))
     
     # Adult-female survival  
-    survAF = as.numeric(plogis(mu.s.af[seasons[capture]] + 
-                                        s.af.beta.age[seasons[capture]] * age +
-                                        s.af.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
-                                        s.af.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
-                                        s.af.beta.habitat.woodland[seasons[capture], habitat] +
-                                        epsilon.s.af[seasons[capture], years[capture]]))
+    survAF = as.numeric(plogis(as.numeric(mu.s.af[seasons[capture]] + 
+                                          s.af.beta.age[seasons[capture]] * age +
+                                          s.af.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
+                                          s.af.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
+                                          s.af.beta.habitat.woodland[seasons[capture], habitat] +
+                                          epsilon.s.af[seasons[capture], years[capture]])))
     
     # Young-male survival
-    survYM = as.numeric(plogis(mu.s.ym[seasons[capture]] + 
-                                        s.ym.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
-                                        s.ym.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
-                                        s.ym.beta.habitat.woodland[seasons[capture], habitat] +
-                                        epsilon.s.ym[seasons[capture], years[capture]]))
+    survYM = as.numeric(plogis(as.numeric(mu.s.ym[seasons[capture]] + 
+                                          s.ym.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
+                                          s.ym.beta.nb.af.pride[seasons[capture]] * nb.af.pride +
+                                          s.ym.beta.habitat.woodland[seasons[capture], habitat] +
+                                          epsilon.s.ym[seasons[capture], years[capture]])))
     
     # Nomadic-male survival
-    survNM = as.numeric(plogis(mu.s.nm[seasons[capture]] + 
-                                        s.nm.beta.coal.size[seasons[capture]] * coal.size +
-                                        s.nm.beta.habitat.woodland[seasons[capture], habitat] +
-                                        epsilon.s.nm[seasons[capture], years[capture]]))
+    survNM = as.numeric(plogis(as.numeric(mu.s.nm[seasons[capture]] + 
+                                          s.nm.beta.coal.size[seasons[capture]] * coal.size +
+                                          s.nm.beta.habitat.woodland[seasons[capture], habitat] +
+                                          epsilon.s.nm[seasons[capture], years[capture]])))
     
     # Resident-male survival
-    survRM = as.numeric(plogis(mu.s.rm[seasons[capture]] + 
-                                        s.rm.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
-                                        s.rm.beta.coal.size[seasons[capture]] * coal.size +
-                                        s.rm.beta.habitat.woodland[seasons[capture], habitat] +
-                                        epsilon.s.rm[seasons[capture], years[capture]]))
+    survRM = as.numeric(plogis(as.numeric(mu.s.rm[seasons[capture]] + 
+                                          s.rm.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
+                                          s.rm.beta.coal.size[seasons[capture]] * coal.size +
+                                          s.rm.beta.habitat.woodland[seasons[capture], habitat] +
+                                          epsilon.s.rm[seasons[capture], years[capture]])))
     
     # Young-male emigration
-    emigYM = as.numeric(plogis(mu.emig.ym[seasons[capture]] + 
-                                        emig.ym.beta.habitat.woodland[seasons[capture], habitat] +
-                                        epsilon.emig.ym[seasons[capture], years[capture]]))
+    emigYM = as.numeric(plogis(as.numeric(mu.emig.ym[seasons[capture]] + 
+                                          emig.ym.beta.habitat.woodland[seasons[capture], habitat] +
+                                          epsilon.emig.ym[seasons[capture], years[capture]])))
     
     # Young-male transition to nomadic male
-    transYM = as.numeric(plogis(mu.t.ym.nm[seasons[capture]] + 
-                                         epsilon.t.ym.nm[seasons[capture], years[capture]]))
+    transYM = as.numeric(plogis(as.numeric(mu.t.ym.nm[seasons[capture]] + 
+                                           epsilon.t.ym.nm[seasons[capture], years[capture]])))
     
     # Nomadic-male takeover
-    takeover = as.numeric(plogis(mu.takeover[seasons[capture]] + 
-                                          takeover.beta.coal.size[seasons[capture]] * coal.size +
-                                          takeover.beta.habitat.woodland[seasons[capture], habitat] +
-                                          epsilon.takeover[seasons[capture], years[capture]]))
+    takeover = as.numeric(plogis(as.numeric(mu.takeover[seasons[capture]] + 
+                                            takeover.beta.coal.size[seasons[capture]] * coal.size +
+                                            takeover.beta.habitat.woodland[seasons[capture], habitat] +
+                                            epsilon.takeover[seasons[capture], years[capture]])))
     
     # Resident-male eviction
-    eviction = as.numeric(plogis(mu.eviction[seasons[capture]] + 
-                                          eviction.beta.coal.size[seasons[capture]] * coal.size +
-                                          eviction.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
-                                          eviction.beta.habitat.woodland[seasons[capture], habitat] +
-                                          epsilon.eviction[seasons[capture], years[capture]]))
+    eviction = as.numeric(plogis(as.numeric(mu.eviction[seasons[capture]] + 
+                                            eviction.beta.coal.size[seasons[capture]] * coal.size +
+                                            eviction.beta.nb.nm.coal.hr[seasons[capture]] * nb.nm.coal.hr +
+                                            eviction.beta.habitat.woodland[seasons[capture], habitat] +
+                                            epsilon.eviction[seasons[capture], years[capture]])))
     
     # Pride-individual detection
-    dpPride = as.numeric(plogis(mu.dp.pride[seasons[capture + 1]] +
-                                         dp.pride.beta.habitat.woodland[seasons[capture + 1], habitat] +
-                                         epsilon.dp.pride[seasons[capture + 1], years[capture + 1]]))
+    dpPride = as.numeric(plogis(as.numeric(mu.dp.pride[seasons[capture + 1]] +
+                                           dp.pride.beta.habitat.woodland[seasons[capture + 1], habitat] +
+                                           epsilon.dp.pride[seasons[capture + 1], years[capture + 1]])))
     
     # Nomadic-male detection
-    dpNM = as.numeric(plogis(mu.dp.nm[seasons[capture + 1]] +
-                                      dp.nm.beta.habitat.woodland[seasons[capture + 1], habitat] +
-                                      epsilon.dp.nm[seasons[capture + 1], years[capture + 1]]))
+    dpNM = as.numeric(plogis(as.numeric(mu.dp.nm[seasons[capture + 1]] +
+                                        dp.nm.beta.habitat.woodland[seasons[capture + 1], habitat] +
+                                        epsilon.dp.nm[seasons[capture + 1], years[capture + 1]])))
     
     # Dead-individual detection
-    dpDead = as.numeric(plogis(mu.dp.dead[seasons[capture + 1]] +
-                                        epsilon.dp.dead[seasons[capture + 1], years[capture + 1]]))
+    dpDead = as.numeric(plogis(as.numeric(mu.dp.dead[seasons[capture + 1]] +
+                                          epsilon.dp.dead[seasons[capture + 1], years[capture + 1]])))
     
     
     # Transitions between true stages
@@ -852,12 +859,12 @@ simulate_data = function(sim){ # sim = core
 library(snowfall)
 
 sfInit(parallel = TRUE, cpus = ncpus, # Initialisation and progress output file
-       slaveOutfile = "DataSimulationProgress.txt")
+       slaveOutfile = "Output/DataSimulationProgress.txt")
 sfExport(list = c(ls(), ".Random.seed")) # Export current environment to each core
 sfLibrary("snowfall", character.only = TRUE) # Load snowfall 
 
 # Results of each set of iterations are saved to a file
-data_simulation_output = sfClusterApplyLB(1:ncpus, simulate_data) # Run simulations on each core
+lions_multistate_simulated_data = sfClusterApplyLB(1:ncpus, simulate_data) # Run simulations on each core
 
-save(data_simulation_output, file = "Simulated_CH.RData")
+save(lions_multistate_simulated_data, file = "Output/Lions_MultistateModel_Simulated_Data.RData")
 sfStop() # Stop parallelization

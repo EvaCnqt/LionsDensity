@@ -103,13 +103,21 @@ dDHMM_lionKF = nimbleFunction(
       # pi = probability of each latent state, conditioned on preceding observations
       # Zpi = probability of current observed capture, conditioned on each possible latent state
       
-      Zpi <- pi
+      Zpi <- pi  # Initialise Zpi with the values of pi to avoid assigning values        
+                 # to Zpi when the observation probability of a given latent
+                 # state in a given observed state is 1 (e.g. Zpi[12] when x[t] == 13,
+                 # as permanently dead individuals will always be unobserved).
       
       # Detection probabilities 
       
       if(x[t] == 1){ 
         
-        Zpi[1] <- pi[1]
+        # We do not assign any value to Zpi[1] here because the latent state 1 "young subadults"
+        # is the first state defined in our model. Therefore, in the capture histories,
+        # observations are either (1) an NA if the first capture of an individual took place
+        # when it was older than 1.5 years, or (2) a 1 if the first capture happened when
+        # it was between 1 and 1.5 years old.
+        
         Zpi[2] <- 0
         Zpi[3] <- 0
         Zpi[4] <- 0
@@ -308,10 +316,14 @@ dDHMM_lionKF = nimbleFunction(
         Zpi[10] <- pi[10] * (1 - dpPride[t])
         Zpi[11] <- pi[11] * (1- dpDead[t])
         
+        # We do not assign any value to Zpi[12] here because individuals in
+        # the latent "permanently dead" state 12 are always unobserved (observed state 13).
+        # The value of Zpi[12] is therefore the one it has been initialised with (pi[12])
+        
       }
       
-      sumZpi <- sum(Zpi)
-      logL <- logL + log(sumZpi) # Log-likelihood contribution of observed state
+      sumZpi <- sum(Zpi)         # Log-likelihood contribution of given observed state x
+      logL <- logL + log(sumZpi) # Overall log likelihood
       
       # Transition probabilities 
       

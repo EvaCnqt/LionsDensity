@@ -34,16 +34,16 @@ library(bayestestR)
 # ------------------
 
 # Individual capture histories
-lions.ch = read.csv("Data/01_LionsCaptureHistories.csv", row.names = 1)
+lions.ch = read.csv("Data/011_LionsCaptureHistories.csv", row.names = 1)
 lions.ch = as.matrix(lions.ch)
 
 # Simulated datasets
-load("Output/Simulated_CH")
-data_simulation_output = c(data_simulation_output[[1]], # Merge simulated datasets
-                           data_simulation_output[[2]], # from each parallel core
-                           data_simulation_output[[3]],
-                           data_simulation_output[[4]], 
-                           data_simulation_output[[5]])
+load("Output/Lions_MultistateModel_Simulated_Data.RData")
+data_simulation_output = c(lions_multistate_simulated_data[[1]], # Merge simulated datasets
+                           lions_multistate_simulated_data[[2]], # from each parallel core
+                           lions_multistate_simulated_data[[3]],
+                           lions_multistate_simulated_data[[4]], 
+                           lions_multistate_simulated_data[[5]])
 
 
 
@@ -65,19 +65,8 @@ get_last  = function(x){
   
 }
 
-lions_first = apply(lions_ch, 1, get_first)
-lions_last = apply(lions_ch, 1, get_last)
-
-
-
-
-###########################################################################
-#
-# 3. Loading model output ----
-#
-###########################################################################
-
-lions_output_GLMM = read.csv("Output/MultistateModel_Samples.csv")
+lions.first = apply(lions.ch, 1, get_first)
+lions.last = apply(lions.ch, 1, get_last)
 
 
 
@@ -341,7 +330,7 @@ total_nb_recaptures_ym4_true = nb.recaptures(lions.ch, 8)
 ## 4.1.27. Number of recaptures as young male 4 (8) at t + 1 ----
 # ----------------------------------------------------------
 
-total_nb_recaptures_ym4_t2_true = nb.recaptures.tn(lions.ch, 8, 1)
+total_nb_recaptures_ym4_t1_true = nb.recaptures.tn(lions.ch, 8, 1)
 
 
 ## 4.1.28. Number of recaptures as young male 4 (8) at t + 2 ----
@@ -353,7 +342,7 @@ total_nb_recaptures_ym4_t2_true = nb.recaptures.tn(lions.ch, 8, 2)
 ## 4.1.29. Number of recaptures as young male 4 (8) from young male 3 (7) at t + 1 ----
 # --------------------------------------------------------------------------------
 
-total_nb_recaptures_ym4_from_ym2_t2_true = nb.recaptures.from.state.tn(lions.ch,
+total_nb_recaptures_ym4_from_ym3_t1_true = nb.recaptures.from.state.tn(lions.ch,
                                                                        7, 8, 2)
 
 
@@ -2570,7 +2559,7 @@ colBG = "transparent"
 # Define color, font, font size of plot
 colPlot = "black"
 font = "Helvetica"
-fontSize = 10
+fontSize = 7
 
 
 # We first merge all the simulated and observed values in the same
@@ -3538,9 +3527,9 @@ fontSize = 7 # Smaller font size to avoid label overlap
 for(i in 1:length(temp)){
   
   j = ifelse(i != length(temp), temp[i] + 15, # Index of last plot on the current page
-             length(unique(sim_obs$metric))) 
+             length(unique(sim_obs_df$metric))) 
   
-  sim_obs_plot = ggplot(sim_obs[which(sim_obs$metric %in% unique(sim_obs$metric)[(temp[i]):(j)]), ], 
+  sim_obs_plot = ggplot(sim_obs_df[which(sim_obs_df$metric %in% unique(sim_obs_df$metric)[(temp[i]):(j)]), ], 
                         aes(x = sim_distribution)) +
     facet_wrap(~ metric, scales = "free", ncol = 4) +
     geom_density(alpha = 0.2, col = "#3B0F70FF", fill = "#3B0F70FF") +
@@ -3568,7 +3557,7 @@ for(i in 1:length(temp)){
           legend.position = "none",
           strip.text = element_text(size = fontSize, margin = margin(b = 5)))
   
-  png(filename = paste0("CMR_PPC_Plots_", i, ".png"),
+  png(filename = paste0("Output/Plots/Lions_Multistate_PPC_Plots_", i, ".png"),
       width = 15,
       height = 12,
       units = "cm",
@@ -4079,7 +4068,7 @@ multi_pval_df$metric = factor(multi_pval_df$metric, levels = unique(multi_pval_d
 ## 6.3. Plot single p-values ----
 # --------------------------
 
-png(filename = "CMR_PPC_SinglePvalues.png",
+png(filename = "Output/Plots/Lions_Multistate_PPC_SinglePvalues.png",
     width = 8,
     height = 8,
     units = "cm",
@@ -4119,7 +4108,9 @@ mean_multi_pval_df = aggregate(pvalues ~ metric, data = multi_pval_df,
 
 ## 6.4. Plot multi p-values ----
 # -------------------------
-png(filename = "CMR_PPC_MultiPvalues.png",
+fontSize = 6
+
+png(filename = "Output/Plots/Lions_Multistate_PPC_MultiPvalues.png",
     width = 23,
     height = 10,
     units = "cm",
